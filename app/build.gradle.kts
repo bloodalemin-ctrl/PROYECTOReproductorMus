@@ -5,14 +5,13 @@ plugins {
 
 android {
     namespace = "com.example.reproductor"
-    compileSdk {
-        version = release(36)
-    }
+    // Subimos a 36 para que las librerías nuevas funcionen
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.reproductor"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 36 // También subimos el target a 36
         versionCode = 1
         versionName = "1.0"
 
@@ -28,16 +27,19 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     buildFeatures {
         compose = true
     }
 }
 
 dependencies {
+    // Librerías base de Android (usando los alias de tu archivo original)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -46,6 +48,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+
+    // --- MOTOR DE MÚSICA (MEDIA3) ---
+    implementation("androidx.media3:media3-exoplayer:1.3.1")
+    implementation("androidx.media3:media3-common:1.3.1")
+    implementation("androidx.media3:media3-ui:1.3.1")
+
+    // Pruebas y Debug
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
