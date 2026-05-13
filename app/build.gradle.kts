@@ -52,7 +52,6 @@ dependencies {
     // --- MOTOR DE MÚSICA (MEDIA3) USANDO EL CATALOGO TOML ---
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.common)
-    implementation(libs.androidx.media3.ui)
 
     // Pruebas y Debug
     testImplementation(libs.junit)
