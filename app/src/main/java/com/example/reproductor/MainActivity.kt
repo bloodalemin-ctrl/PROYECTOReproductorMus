@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
                     // --- EL CEREBRO PARA CAMBIAR DE PANTALLA ---
                     if (estilo.esNokia) {
 
-                        // 1. EL DISEÑO DE TU AMIGA (El código original que tenías)
+                        // 1. EL DISEÑO (El código original que tenías)
                         Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                             Column(
                                 modifier = Modifier
@@ -80,6 +80,8 @@ class MainActivity : ComponentActivity() {
                         onClick = { viewModel.cambiarTema() },
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
+                            // CORRECCIÓN DE COPILOT: Evita que la barra de navegación del celular lo tape
+                            .navigationBarsPadding()
                             .padding(bottom = 32.dp)
                             .fillMaxWidth(0.8f), // Que no ocupe todo el ancho para que se vea bonito
                         colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f))
