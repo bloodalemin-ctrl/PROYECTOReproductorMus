@@ -29,16 +29,15 @@ import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.delay
-
-// --- IMPORTACIONES NUEVAS PARA EL CICLO DE VIDA ---
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
-enum class PlayerView { Album, Cassette, Visualizer }
+private enum class WmpVisualizationMode { Album, Cassette, Visualizer }
 
+// AHORA RECIBE LA ORDEN DE CAMBIAR DE TEMA DESDE EL MAIN ACTIVITY
 @Composable
-fun WmpThemeScreen() {
+fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
     val context = LocalContext.current
 
     val exoPlayer = remember {
@@ -53,12 +52,10 @@ fun WmpThemeScreen() {
     }
 
     var isPlaying by remember { mutableStateOf(false) }
-    var currentView by remember { mutableStateOf(PlayerView.Cassette) }
-
+    var currentView by remember { mutableStateOf(WmpVisualizationMode.Cassette) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
 
-    // --- MAGIA DEL VOLUMEN REAL DEL CELULAR ---
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
     var volume by remember {
@@ -73,25 +70,20 @@ fun WmpThemeScreen() {
         while (isPlaying) {
             currentPosition = exoPlayer.currentPosition
             duration = exoPlayer.duration.coerceAtLeast(0L)
-
-            // Actualizamos el slider por si cambiaste el volumen con los botones físicos del celular
             volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-
             delay(1000L)
         }
     }
 
-    // --- CORRECCIÓN DE COPILOT: PAUSAR AUDIO AL MINIMIZAR LA APP ---
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
                 exoPlayer.pause()
-                isPlaying = false // Cambiamos el botón a pausa automáticamente
+                isPlaying = false
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             exoPlayer.release()
@@ -111,7 +103,6 @@ fun WmpThemeScreen() {
             .navigationBarsPadding(),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // --- ZONA VISUAL ---
         Box(
             modifier = Modifier.fillMaxWidth().weight(1f).padding(20.dp),
             contentAlignment = Alignment.Center
@@ -122,18 +113,18 @@ fun WmpThemeScreen() {
                 label = "ViewSwitch"
             ) { target ->
                 when (target) {
-                    PlayerView.Album -> AlbumPlaceholder()
-                    PlayerView.Cassette -> CassetteRealistico(isPlaying)
-                    PlayerView.Visualizer -> VisualizerOndas(isPlaying)
+                    WmpVisualizationMode.Album -> AlbumPlaceholder()
+                    WmpVisualizationMode.Cassette -> CassetteRealistico(isPlaying)
+                    WmpVisualizationMode.Visualizer -> VisualizerOndas(isPlaying)
                 }
             }
 
             IconButton(
                 onClick = {
                     currentView = when(currentView) {
-                        PlayerView.Album -> PlayerView.Cassette
-                        PlayerView.Cassette -> PlayerView.Visualizer
-                        PlayerView.Visualizer -> PlayerView.Album
+                        WmpVisualizationMode.Album -> WmpVisualizationMode.Cassette
+                        WmpVisualizationMode.Cassette -> WmpVisualizationMode.Visualizer
+                        WmpVisualizationMode.Visualizer -> WmpVisualizationMode.Album
                     }
                 },
                 modifier = Modifier.align(Alignment.TopEnd).background(Color.White.copy(0.1f), CircleShape)
@@ -142,7 +133,6 @@ fun WmpThemeScreen() {
             }
         }
 
-        // --- PANEL DE CONTROL ---
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -203,20 +193,16 @@ fun WmpThemeScreen() {
                     WmpSimpleButton("⏭", silverColor) { /* Siguiente */ }
                 }
 
-                // BARRA DE VOLUMEN REAL
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     Text("🔈", color = silverColor, fontSize = 16.sp)
                     Slider(
                         value = volume,
                         onValueChange = {
                             volume = it
-                            // Conecta el slider con el hardware del celular
                             val realVolume = (it * maxVolume).toInt()
                             try {
                                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, realVolume, 0)
-                            } catch (_: SecurityException) {
-                                // Ignorar en dispositivos/restricciones donde DND impide cambiar el volumen.
-                            }
+                            } catch (_: SecurityException) {}
                         },
                         modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
                         colors = SliderDefaults.colors(
@@ -228,18 +214,30 @@ fun WmpThemeScreen() {
                     Text("🔊", color = silverColor, fontSize = 16.sp)
                 }
 
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // AQUÍ EJECUTA LA ORDEN CUANDO LO TOCAS
+                Button(
+                    onClick = onCambiarTema,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.2f)
+                    )
+                ) {
+                    Text("CAMBIAR A MODO NOKIA", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(30.dp))
             }
         }
     }
 }
 
-// --- SUB-VISTAS CORREGIDAS ---
-
 @Composable
 fun CassetteRealistico(isPlaying: Boolean) {
     var angulo by remember { mutableFloatStateOf(0f) }
-
     LaunchedEffect(isPlaying) {
         while (isPlaying) {
             delay(16)
@@ -247,7 +245,6 @@ fun CassetteRealistico(isPlaying: Boolean) {
             if (angulo >= 360f) angulo = 0f
         }
     }
-
     Box(
         modifier = Modifier
             .size(280.dp, 180.dp)
@@ -262,12 +259,7 @@ fun CassetteRealistico(isPlaying: Boolean) {
                 .border(1.dp, Color.Black.copy(0.2f), RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(120.dp, 40.dp)
-                    .background(Color(0xFF111111), RoundedCornerShape(4.dp))
-                    .border(2.dp, Color.Black, RoundedCornerShape(4.dp))
-            )
+            Box(modifier = Modifier.size(120.dp, 40.dp).background(Color(0xFF111111), RoundedCornerShape(4.dp)))
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 40.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -299,18 +291,14 @@ fun Engranaje(angulo: Float) {
 @Composable
 fun VisualizerOndas(isPlaying: Boolean) {
     var alturas by remember { mutableStateOf(List(12) { 10.dp }) }
-
     LaunchedEffect(isPlaying) {
         if (isPlaying) {
             while (true) {
                 alturas = List(12) { (30..150).random().dp }
                 delay(250)
             }
-        } else {
-            alturas = List(12) { 10.dp }
-        }
+        } else { alturas = List(12) { 10.dp } }
     }
-
     Row(
         Modifier.fillMaxWidth().height(160.dp).padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -322,15 +310,10 @@ fun VisualizerOndas(isPlaying: Boolean) {
                 animationSpec = tween(durationMillis = if (isPlaying) 250 else 500, easing = LinearEasing),
                 label = "eq_bar"
             )
-            Box(
-                Modifier
-                    .width(16.dp)
-                    .height(alturaAnimada)
-                    .background(
-                        Brush.verticalGradient(listOf(Color(0xFF4FC3F7), Color(0xFF0277BD))),
-                        RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
-                    )
-            )
+            Box(Modifier.width(16.dp).height(alturaAnimada).background(
+                Brush.verticalGradient(listOf(Color(0xFF4FC3F7), Color(0xFF0277BD))),
+                RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp)
+            ))
         }
     }
 }
