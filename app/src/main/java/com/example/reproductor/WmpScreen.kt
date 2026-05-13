@@ -195,7 +195,11 @@ fun WmpThemeScreen() {
                             volume = it
                             // Conecta el slider con el hardware del celular
                             val realVolume = (it * maxVolume).toInt()
-                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, realVolume, 0)
+                            try {
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, realVolume, 0)
+                            } catch (_: SecurityException) {
+                                // Ignorar en dispositivos/restricciones donde DND impide cambiar el volumen.
+                            }
                         },
                         modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
                         colors = SliderDefaults.colors(
