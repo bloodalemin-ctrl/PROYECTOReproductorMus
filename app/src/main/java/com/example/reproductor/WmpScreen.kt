@@ -143,13 +143,12 @@ fun WmpThemeScreen() {
         }
 
         // --- PANEL DE CONTROL ---
-        Surface(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
                 .background(wmpGradient)
-                .border(2.dp, silverColor.copy(0.3f), RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)),
-            color = Color.Transparent
+                .border(2.dp, silverColor.copy(0.3f), RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
