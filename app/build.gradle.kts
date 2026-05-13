@@ -49,10 +49,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
-    // --- MOTOR DE MÚSICA (MEDIA3) ---
-    implementation("androidx.media3:media3-exoplayer:1.3.1")
-    implementation("androidx.media3:media3-common:1.3.1")
-    implementation("androidx.media3:media3-ui:1.3.1")
+    // --- MOTOR DE MÚSICA (MEDIA3) USANDO EL CATALOGO TOML ---
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.media3.ui)
 
     // Pruebas y Debug
     testImplementation(libs.junit)
