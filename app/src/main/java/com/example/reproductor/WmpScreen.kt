@@ -30,6 +30,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.delay
 
+// --- IMPORTACIONES NUEVAS PARA EL CICLO DE VIDA ---
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+
 enum class PlayerView { Album, Cassette, Visualizer }
 
 @Composable
@@ -76,8 +81,21 @@ fun WmpThemeScreen() {
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
+    // --- CORRECCIÓN DE COPILOT: PAUSAR AUDIO AL MINIMIZAR LA APP ---
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                exoPlayer.pause()
+                isPlaying = false // Cambiamos el botón a pausa automáticamente
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            exoPlayer.release()
+        }
     }
 
     val wmpGradient = Brush.verticalGradient(
