@@ -3,7 +3,6 @@ package com.example.reproductor
 
 import android.content.Context
 import android.media.AudioManager
-import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -26,32 +25,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.delay
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 
 private enum class WmpVisualizationMode { Album, Cassette, Visualizer }
 
 // AHORA RECIBE LA ORDEN DE CAMBIAR DE TEMA DESDE EL MAIN ACTIVITY
 @Composable
-fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
+fun WmpThemeScreen(viewModel: ReproductorViewModel) { // <-- CAMBIO: Recibe tu motor en lugar de la función vacía
     val context = LocalContext.current
 
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri(
-                Uri.parse("android.resource://${context.packageName}/raw/cancion_retro")
-            )
-            setMediaItem(mediaItem)
-            prepare()
-            repeatMode = ExoPlayer.REPEAT_MODE_ONE
-        }
-    }
+    // <-- CAMBIO: Conectamos sus variables a tu motor central para que no se corte la música
+    val exoPlayer = viewModel.exoPlayer
+    val isPlaying = viewModel.isPlaying
 
-    var isPlaying by remember { mutableStateOf(false) }
     var currentView by remember { mutableStateOf(WmpVisualizationMode.Cassette) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
@@ -63,30 +49,11 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
     }
 
     LaunchedEffect(isPlaying) {
-        if (isPlaying) exoPlayer.play() else exoPlayer.pause()
-    }
-
-    LaunchedEffect(isPlaying) {
         while (isPlaying) {
             currentPosition = exoPlayer.currentPosition
             duration = exoPlayer.duration.coerceAtLeast(0L)
             volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
             delay(1000L)
-        }
-    }
-
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                exoPlayer.pause()
-                isPlaying = false
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-            exoPlayer.release()
         }
     }
 
@@ -184,7 +151,7 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
                             .size(75.dp)
                             .background(Color.White.copy(0.1f), CircleShape)
                             .border(3.dp, accentBlue, CircleShape)
-                            .clickable { isPlaying = !isPlaying },
+                            .clickable { viewModel.alternarReproduccion() }, // <-- CAMBIO: Llama a tu ViewModel para el Play/Pause
                         contentAlignment = Alignment.Center
                     ) {
                         Text(if (isPlaying) "⏸" else "▶", color = accentBlue, fontSize = 35.sp)
@@ -218,7 +185,7 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
 
                 // AQUÍ EJECUTA LA ORDEN CUANDO LO TOCAS
                 Button(
-                    onClick = onCambiarTema,
+                    onClick = { viewModel.cambiarTema() }, // <-- CAMBIO: Llama a tu ViewModel para saltar a Nokia
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
@@ -342,7 +309,3 @@ fun formatTime(ms: Long): String {
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
 }
-
-@Preview(showSystemUi = true)
-@Composable
-fun FinalPreview() { WmpThemeScreen() }
