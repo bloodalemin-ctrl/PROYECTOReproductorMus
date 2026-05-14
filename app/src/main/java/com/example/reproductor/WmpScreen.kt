@@ -6,6 +6,7 @@ import android.media.AudioManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -33,7 +34,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -76,45 +76,30 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             try {
-                val jsonString = """
-                [
-                  {
-                    "titulo": "Baile Inolvidable",
-                    "artista": "Bad Bunny",
-                    "url": "https://drive.google.com/uc?export=download&id=1zpq4gIaB9VyFw41VmIjZRfnCL1ssU84r"
-                  },
-                  {
-                    "titulo": "Nokia Synthwave",
-                    "artista": "Programador Nocturno",
-                    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
-                  }
-                ]
-                """.trimIndent()
+                // AQUÍ ESTÁN TUS CANCIONES CONFIGURADAS
+                val misCanciones = listOf(
+                    Triple("Baile Inolvidable", "Bad Bunny", "1zpq4gIaB9VyFw41VmIjZRfnCL1ssU84r"),
+                    Triple("Es un secreto", "Plan B", "1S-P_hPui-qQpqkixxqBKn1iVy4JhM642"),
+                    Triple("Algo me gusta de ti", "Wisin y Yandel Ft. Chris Brown y T-Pain", "1ZKNzACGZpA-aaOqJdSYlW4usR3dtINvu"),
+                    Triple("Pasarela", "Daddy Yankee", "14jYGHEMy56I6I2wy_H-pijuOnQqA_j0T")
+                )
 
-                val jsonArray = JSONArray(jsonString)
-                val listaCanciones = mutableListOf<MediaItem>()
-
-                for (i in 0 until jsonArray.length()) {
-                    val objeto = jsonArray.getJSONObject(i)
-                    val titulo = objeto.getString("titulo")
-                    val artista = objeto.getString("artista")
-                    val url = objeto.getString("url")
+                val listaMediaItems = misCanciones.map { (titulo, artista, id) ->
+                    val urlDirecta = "https://drive.google.com/uc?export=download&id=$id"
 
                     val metadatos = MediaMetadata.Builder()
                         .setTitle(titulo)
                         .setArtist(artista)
                         .build()
 
-                    val mediaItem = MediaItem.Builder()
-                        .setUri(url)
+                    MediaItem.Builder()
+                        .setUri(urlDirecta)
                         .setMediaMetadata(metadatos)
                         .build()
-
-                    listaCanciones.add(mediaItem)
                 }
 
                 withContext(Dispatchers.Main) {
-                    exoPlayer.setMediaItems(listaCanciones)
+                    exoPlayer.setMediaItems(listaMediaItems)
                     exoPlayer.prepare()
                     // NUEVO: FORZAMOS EL AUTO-PLAY Y CAMBIAMOS EL BOTÓN
                     exoPlayer.playWhenReady = false
@@ -123,8 +108,10 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
 
             } catch (e: Exception) {
                 e.printStackTrace()
-                currentTitle = "Error de conexión"
-                currentArtist = "Revisa tu internet"
+                withContext(Dispatchers.Main) {
+                    currentTitle = "Error de conexión"
+                    currentArtist = "Revisa tu internet"
+                }
             }
         }
     }
@@ -222,14 +209,22 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+
+                val textoBase = "🎵 $currentTitle - $currentArtist"
+                val textoInfinito = "$textoBase          •          ".repeat(10)
+
                 Text(
-                    text = "🎵 $currentTitle - $currentArtist",
+                    text = textoInfinito,
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(bottom = 12.dp)
+                    modifier = Modifier
+                        .padding(bottom = 12.dp)
+                        .basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            velocity = 35.dp
+                        )
                 )
 
                 Row(
