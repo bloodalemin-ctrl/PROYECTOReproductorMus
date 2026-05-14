@@ -12,7 +12,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     var temaActual by mutableStateOf<ModoEstilo>(ModoEstilo.WMP)
         private set
 
-    // EL MOTOR GLOBAL
+    // MOTOR GLOBAL
     val exoPlayer = ExoPlayer.Builder(application).build().apply {
         val mediaItem = MediaItem.fromUri(
             Uri.parse("android.resource://${application.packageName}/raw/cancion_retro")

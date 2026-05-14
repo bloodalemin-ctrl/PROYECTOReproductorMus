@@ -143,7 +143,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
                 Spacer(modifier = Modifier.height(5.dp))
 
-                // --- slider de la cancion o carrusel
+                // lider de la cancion o carrusel
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

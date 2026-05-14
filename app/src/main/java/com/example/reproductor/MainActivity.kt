@@ -19,10 +19,10 @@ class MainActivity : ComponentActivity() {
                 val estilo = viewModel.temaActual
 
                 if (estilo.esNokia) {
-                    // TU DISEÑO
+
                     SeccionNokia(viewModel = viewModel)
                 } else {
-                    // EL DISEÑO DE TU AMIGA
+
                     WmpThemeScreen(viewModel = viewModel)
                 }
             }
