@@ -3,7 +3,6 @@ package com.example.reproductor
 
 import android.content.Context
 import android.media.AudioManager
-import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -27,31 +26,110 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 private enum class WmpVisualizationMode { Album, Cassette, Visualizer }
 
-// AHORA RECIBE LA ORDEN DE CAMBIAR DE TEMA DESDE EL MAIN ACTIVITY
 @Composable
 fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
     val context = LocalContext.current
 
+    // Variables para actualizar la interfaz dinámicamente
+    var currentTitle by remember { mutableStateOf("Cargando lista...") }
+    var currentArtist by remember { mutableStateOf("Espere por favor") }
+    // MOVIMOS ESTA VARIABLE ARRIBA PARA PODER CONTROLARLA DESDE LA DESCARGA
+    var isPlaying by remember { mutableStateOf(false) }
+
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri(
-                Uri.parse("android.resource://${context.packageName}/raw/cancion_retro")
-            )
-            setMediaItem(mediaItem)
-            prepare()
-            repeatMode = ExoPlayer.REPEAT_MODE_ONE
+            repeatMode = ExoPlayer.REPEAT_MODE_ALL
+
+            addListener(object : Player.Listener {
+                override fun onMediaMetadataChanged(mediaMetadata: MediaMetadata) {
+                    currentTitle = mediaMetadata.title?.toString() ?: "Pista Desconocida"
+                    currentArtist = mediaMetadata.artist?.toString() ?: "Artista Desconocido"
+                }
+
+                // NUEVO: DETECTOR DE ERRORES. SI FALLA, TE LO DICE EN PANTALLA
+                override fun onPlayerError(error: PlaybackException) {
+                    currentTitle = "Error al reproducir"
+                    currentArtist = error.message ?: "Revisa permisos o internet"
+                    isPlaying = false
+                }
+            })
         }
     }
 
-    var isPlaying by remember { mutableStateOf(false) }
+    // =========================================================
+    // BLOQUE DE DESCARGA DE LA PLAYLIST
+    // =========================================================
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                val jsonString = """
+                [
+                  {
+                    "titulo": "Baile Inolvidable",
+                    "artista": "Bad Bunny",
+                    "url": "https://drive.google.com/uc?export=download&id=1zpq4gIaB9VyFw41VmIjZRfnCL1ssU84r"
+                  },
+                  {
+                    "titulo": "Nokia Synthwave",
+                    "artista": "Programador Nocturno",
+                    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+                  }
+                ]
+                """.trimIndent()
+
+                val jsonArray = JSONArray(jsonString)
+                val listaCanciones = mutableListOf<MediaItem>()
+
+                for (i in 0 until jsonArray.length()) {
+                    val objeto = jsonArray.getJSONObject(i)
+                    val titulo = objeto.getString("titulo")
+                    val artista = objeto.getString("artista")
+                    val url = objeto.getString("url")
+
+                    val metadatos = MediaMetadata.Builder()
+                        .setTitle(titulo)
+                        .setArtist(artista)
+                        .build()
+
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(url)
+                        .setMediaMetadata(metadatos)
+                        .build()
+
+                    listaCanciones.add(mediaItem)
+                }
+
+                withContext(Dispatchers.Main) {
+                    exoPlayer.setMediaItems(listaCanciones)
+                    exoPlayer.prepare()
+                    // NUEVO: FORZAMOS EL AUTO-PLAY Y CAMBIAMOS EL BOTÓN
+                    exoPlayer.playWhenReady = false
+                    isPlaying = false
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                currentTitle = "Error de conexión"
+                currentArtist = "Revisa tu internet"
+            }
+        }
+    }
+    // =========================================================
+
     var currentView by remember { mutableStateOf(WmpVisualizationMode.Cassette) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
@@ -145,7 +223,7 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "🎵 Pista Retro - Desconocido",
+                    text = "🎵 $currentTitle - $currentArtist",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
@@ -177,7 +255,14 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 10.dp)) {
-                    WmpSimpleButton("⏮", silverColor) { exoPlayer.seekTo(0) }
+                    WmpSimpleButton("⏮", silverColor) {
+                        if (exoPlayer.hasPreviousMediaItem()) {
+                            exoPlayer.seekToPrevious()
+                        } else {
+                            exoPlayer.seekTo(0)
+                        }
+                    }
+
                     Spacer(Modifier.width(25.dp))
                     Box(
                         modifier = Modifier
@@ -190,7 +275,12 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
                         Text(if (isPlaying) "⏸" else "▶", color = accentBlue, fontSize = 35.sp)
                     }
                     Spacer(Modifier.width(25.dp))
-                    WmpSimpleButton("⏭", silverColor) { /* Siguiente */ }
+
+                    WmpSimpleButton("⏭", silverColor) {
+                        if (exoPlayer.hasNextMediaItem()) {
+                            exoPlayer.seekToNext()
+                        }
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -216,7 +306,6 @@ fun WmpThemeScreen(onCambiarTema: () -> Unit = {}) {
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // AQUÍ EJECUTA LA ORDEN CUANDO LO TOCAS
                 Button(
                     onClick = onCambiarTema,
                     modifier = Modifier
