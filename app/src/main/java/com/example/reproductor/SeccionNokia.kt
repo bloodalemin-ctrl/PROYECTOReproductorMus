@@ -47,7 +47,11 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
         mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
     }
 
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, viewModel.currentTitle) {
+        currentPosition = exoPlayer.currentPosition
+        duration = exoPlayer.duration.coerceAtLeast(0L)
+        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+
         while (isPlaying) {
             currentPosition = exoPlayer.currentPosition
             duration = exoPlayer.duration.coerceAtLeast(0L)
@@ -164,7 +168,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // VOLUMENnNNN
+            // VOLUMEN
             Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1A1A1A), RoundedCornerShape(20.dp)).padding(horizontal = 15.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🔈", color = grayText, fontSize = 18.sp)
                 Slider(
@@ -185,7 +189,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(12) { Box(modifier = Modifier.size(width = 6.dp, height = 12.dp).background(Color(0xFF222222), CircleShape)) } }
         }
 
-        // MENÚUUUU
+        // MENÚ
         if (mostrarMenu) {
             Column(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.95f)).padding(30.dp)) {
                 Text("MENU", color = redBright, fontWeight = FontWeight.Bold, fontSize = 24.sp, fontFamily = FontFamily.Monospace)

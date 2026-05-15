@@ -1,4 +1,8 @@
-@file:OptIn(androidx.media3.common.util.UnstableApi::class, androidx.compose.animation.ExperimentalAnimationApi::class)
+@file:OptIn(
+    androidx.media3.common.util.UnstableApi::class,
+    androidx.compose.animation.ExperimentalAnimationApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
 package com.example.reproductor
 
 import android.content.Context
@@ -42,7 +46,11 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
     var volume by remember { mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
 
-    LaunchedEffect(isPlaying) {
+    LaunchedEffect(isPlaying, viewModel.currentTitle) {
+        currentPosition = exoPlayer.currentPosition
+        duration = exoPlayer.duration.coerceAtLeast(0L)
+        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+
         while (isPlaying) {
             currentPosition = exoPlayer.currentPosition
             duration = exoPlayer.duration.coerceAtLeast(0L)

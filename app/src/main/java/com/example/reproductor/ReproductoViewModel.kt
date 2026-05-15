@@ -49,7 +49,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun cargarPlaylistHibrida(app: Application) {
         try {
-            // canncion desde la carpeta raw
+            // Canción desde la carpeta raw
             val uriLocal = "android.resource://${app.packageName}/raw/cancion_retro"
             val localMeta = MediaMetadata.Builder().setTitle("Pista Local Retro").setArtist("Nokia Demo").build()
             val localItem = MediaItem.Builder().setUri(uriLocal).setMediaMetadata(localMeta).build()
