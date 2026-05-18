@@ -1,6 +1,7 @@
 package com.example.reproductor
 
 import android.app.Application
+import android.net.Uri
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.media3.common.MediaItem
@@ -78,6 +79,30 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
             e.printStackTrace()
         }
     }
+
+    // ====================================================================
+    // Cargar archivos locales (.mp3, .flac) desde el celular y reproducir al instante
+    // ====================================================================
+    fun agregarCancionesLocales(uris: List<Uri>) {
+        //  Averiguamos cuántas canciones hay ahorita para saber en qué posición entrará la nueva
+        val posicionDeInsercion = exoPlayer.mediaItemCount
+
+        val nuevosItems = uris.map { uri ->
+            MediaItem.Builder()
+                .setUri(uri)
+                .build()
+        }
+
+        // Agregamos los archivos al final de la cola
+        exoPlayer.addMediaItems(nuevosItems)
+
+        exoPlayer.seekTo(posicionDeInsercion, 0L)
+
+        // Preparamos y reproducimos al instante
+        exoPlayer.prepare()
+        exoPlayer.play()
+    }
+    // ====================================================================
 
     fun alternarReproduccion() {
         if (isPlaying) exoPlayer.pause() else exoPlayer.play()

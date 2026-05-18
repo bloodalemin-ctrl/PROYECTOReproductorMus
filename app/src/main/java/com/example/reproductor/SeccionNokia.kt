@@ -3,6 +3,8 @@ package com.example.reproductor
 
 import android.content.Context
 import android.media.AudioManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -46,6 +48,18 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
     var volume by remember {
         mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
     }
+
+    // ====================================================================
+    // CONEXIÓN PARA CARGAR MÚSICA LOCAL (Igual que en Windows)
+    // ====================================================================
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+        onResult = { uris ->
+            if (uris.isNotEmpty()) {
+                viewModel.agregarCancionesLocales(uris)
+            }
+        }
+    )
 
     LaunchedEffect(isPlaying, viewModel.currentTitle) {
         currentPosition = exoPlayer.currentPosition
@@ -182,9 +196,48 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            Button(onClick = { viewModel.cambiarTema() }, modifier = Modifier.fillMaxWidth().height(55.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)), shape = RoundedCornerShape(12.dp)) {
-                Text("CAMBIAR A MODO WINDOWS", color = Color.White, fontWeight = FontWeight.Bold)
+            // ====================================================================
+            // NUEVO: BOTÓN DE CARGAR MÚSICA (Conectado al Explorador de Archivos)
+            // ====================================================================
+            Button(
+                onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
+                modifier = Modifier.fillMaxWidth().height(55.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A1A)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.DarkGray),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("📁 CARGAR MÚSICA DEL DISPOSITIVO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
+
+            Spacer(modifier = Modifier.height(15.dp))
+
+            // BOTONES DE CAMBIO DE MODO
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Botón Nokia (Activo)
+                Button(
+                    onClick = { },
+                    modifier = Modifier.weight(1f).height(55.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = redXpress),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("MODO NOKIA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                // Botón Windows (Inactivo)
+                Button(
+                    onClick = { viewModel.cambiarTema() },
+                    modifier = Modifier.weight(1f).height(55.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF222222)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("MODO WINDOWS", color = grayText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(12) { Box(modifier = Modifier.size(width = 6.dp, height = 12.dp).background(Color(0xFF222222), CircleShape)) } }
         }
