@@ -1,3 +1,4 @@
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -52,6 +53,9 @@ dependencies {
     // --- MOTOR DE MÚSICA (MEDIA3) USANDO EL CATALOGO TOML ---
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.common)
+
+    // NUEVA LÍNEA PARA EL SERVICIO DE SEGUNDO PLANO Y NOTIFICACIONES
+    implementation("androidx.media3:media3-session:1.2.0")
 
     // Pruebas y Debug
     testImplementation(libs.junit)

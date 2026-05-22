@@ -1,8 +1,12 @@
+
+
 @file:OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 package com.example.reproductor
 
 import android.content.Context
 import android.media.AudioManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -33,11 +37,20 @@ private enum class NokiaViewMode { Album, Cassette, Visualizer }
 @Composable
 fun SeccionNokia(viewModel: ReproductorViewModel) {
     val context = LocalContext.current
-    val exoPlayer = viewModel.exoPlayer
+
+    // ====================================================================
+    // PARCHE DE SEGURIDAD: Espera a que el servicio se conecte para no crashear
+    // ====================================================================
+    val exoPlayer = viewModel.exoPlayer ?: return
+
     val isPlaying = viewModel.isPlaying
 
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
+    // ====================================================================
+    // SOLUCIÓN AL CONGELAMIENTO: Enlace directo al reloj central del ViewModel
+    // ====================================================================
+    val currentPosition = viewModel.currentPosition
+    val duration = viewModel.duration
+
     var currentView by remember { mutableStateOf(NokiaViewMode.Album) }
     var mostrarMenu by remember { mutableStateOf(false) }
 
@@ -47,18 +60,22 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
         mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
     }
 
-    LaunchedEffect(isPlaying, viewModel.currentTitle) {
-        currentPosition = exoPlayer.currentPosition
-        duration = exoPlayer.duration.coerceAtLeast(0L)
+    // Sincroniza el Slider con el volumen real del Huawei al abrir la pantalla
+    LaunchedEffect(exoPlayer) {
         volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-
-        while (isPlaying) {
-            currentPosition = exoPlayer.currentPosition
-            duration = exoPlayer.duration.coerceAtLeast(0L)
-            volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-            delay(1000L)
-        }
     }
+
+    // ====================================================================
+    // CONEXIÓN PARA CARGAR MÚSICA LOCAL (Igual que en Windows)
+    // ====================================================================
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+        onResult = { uris ->
+            if (uris.isNotEmpty()) {
+                viewModel.agregarCancionesLocales(uris)
+            }
+        }
+    )
 
     val blackBackground = Color(0xFF050505)
     val redXpress = Color(0xFFCC0000)
@@ -121,11 +138,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
                         Text(formatTimeNokia(currentPosition), color = redBright, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                         Slider(
                             value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                            onValueChange = {
-                                val newPos = (it * duration).toLong()
-                                exoPlayer.seekTo(newPos)
-                                currentPosition = newPos
-                            },
+                            onValueChange = { val newPos = (it * duration).toLong(); exoPlayer.seekTo(newPos) },
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(20.dp),
                             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = redBright, inactiveTrackColor = redDark)
                         )
@@ -182,9 +195,44 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            Button(onClick = { viewModel.cambiarTema() }, modifier = Modifier.fillMaxWidth().height(55.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)), shape = RoundedCornerShape(12.dp)) {
-                Text("CAMBIAR A MODO WINDOWS", color = Color.White, fontWeight = FontWeight.Bold)
+            // BOTÓN DE CARGAR MÚSICA (Conectado al Explorador de Archivos)
+            Button(
+                onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
+                modifier = Modifier.fillMaxWidth().height(55.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A1A1A)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.DarkGray),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("📁 CARGAR MÚSICA DEL DISPOSITIVO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
+
+            Spacer(modifier = Modifier.height(15.dp))
+
+            // BOTONES DE CAMBIO DE MODO
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = { },
+                    modifier = Modifier.weight(1f).height(55.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = redXpress),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("MODO NOKIA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                Button(
+                    onClick = { viewModel.cambiarTema() },
+                    modifier = Modifier.weight(1f).height(55.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                    border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF222222)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("MODO WINDOWS", color = grayText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(12) { Box(modifier = Modifier.size(width = 6.dp, height = 12.dp).background(Color(0xFF222222), CircleShape)) } }
         }
