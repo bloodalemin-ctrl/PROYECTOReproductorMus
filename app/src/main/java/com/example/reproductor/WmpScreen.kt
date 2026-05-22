@@ -36,15 +36,28 @@ import kotlinx.coroutines.delay
 @Composable
 fun WmpThemeScreen(viewModel: ReproductorViewModel) {
     val context = LocalContext.current
-    val exoPlayer = viewModel.exoPlayer
+
+    // ====================================================================
+    // PARCHE DE SEGURIDAD: Espera a que el servicio se conecte para no crashear
+    // ====================================================================
+    val exoPlayer = viewModel.exoPlayer ?: return
+
     val isPlaying = viewModel.isPlaying
 
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
+    // ====================================================================
+    // SOLUCIÓN AL CONGELAMIENTO: Vinculación directa al reloj central del ViewModel
+    // ====================================================================
+    val currentPosition = viewModel.currentPosition
+    val duration = viewModel.duration
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
     var volume by remember { mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
+
+    // Sincroniza el Slider con el volumen real del Huawei al abrir la pantalla
+    LaunchedEffect(exoPlayer) {
+        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
+    }
 
     // ====================================================================
     // LANZADOR DEL EXPLORADOR DE ARCHIVOS (Para cargar música local)
@@ -57,19 +70,6 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
             }
         }
     )
-
-    LaunchedEffect(isPlaying, viewModel.currentTitle) {
-        currentPosition = exoPlayer.currentPosition
-        duration = exoPlayer.duration.coerceAtLeast(0L)
-        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-
-        while (isPlaying) {
-            currentPosition = exoPlayer.currentPosition
-            duration = exoPlayer.duration.coerceAtLeast(0L)
-            volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-            delay(1000L)
-        }
-    }
 
     // PALETA DE COLORES RETRO WMP (Skeuomórfica)
     val wmpNostalgiaBlue = Color(0xFF3864A6) // Azul clásico WMP
@@ -85,7 +85,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
         colors = listOf(metallicLight, metallicSilver, metallicDark)
     )
 
-    // Fondo de la app (fuera del reproductor) - AJUSTADO PARA IR ABAJO
+    // Fondo de la app (fuera del reproductor)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -93,7 +93,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
             .navigationBarsPadding() // Evita los botones de navegación
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Bottom // <--- Esto ancla el reproductor abajo
+        verticalArrangement = Arrangement.Bottom // Ancla el reproductor abajo
     ) {
         // EL REPRODUCTOR FÍSICO (Con bordes y bisel)
         Column(
@@ -112,7 +112,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                 Text("v9.0", color = Color(0xFF1A237E), fontSize = 11.sp)
             }
 
-            // 1 & 2. LA "PANTALLA LCD" INCRUSTADA (Contiene Casete y EQ)
+            // PANTALLA LCD INCRUSTADA (Contiene Casete y EQ)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -133,7 +133,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 3. INFORMACIÓN DE LA PISTA (Marquee en caja de texto biselada)
+            // INFORMACIÓN DE LA PISTA (Marquee en caja de texto biselada)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -152,14 +152,14 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                     fontWeight = FontWeight.Bold,
                     fontSize = 16.sp,
                     maxLines = 1,
-                    fontFamily = FontFamily.Monospace, // Font retro
+                    fontFamily = FontFamily.Monospace,
                     modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, velocity = 30.dp)
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 4. BARRA DE PROGRESO Y TIEMPOS (Estilo integrado)
+            // BARRA DE PROGRESO Y TIEMPOS (Estilo integrado y funcional)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -167,7 +167,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                 Text(formatTimeRetroWmp(currentPosition), color = Color(0xFF1A237E), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 Slider(
                     value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                    onValueChange = { val newPos = (it * duration).toLong(); exoPlayer.seekTo(newPos); currentPosition = newPos },
+                    onValueChange = { val newPos = (it * duration).toLong(); exoPlayer.seekTo(newPos) },
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     colors = SliderDefaults.colors(
                         thumbColor = Color.White,
@@ -178,13 +178,12 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                 Text(formatTimeRetroWmp(duration), color = Color(0xFF1A237E), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
             }
 
-            // 5. BOTONES DE REPRODUCCIÓN (Físicos/3D con volumen)
+            // BOTONES DE REPRODUCCIÓN (Físicos/3D)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Botones laterales más pequeños
                 RetroWmpControlButton("⏮", metallicSilver, wmpNostalgiaBlue, 45.dp, 16.sp) {
                     if (exoPlayer.hasPreviousMediaItem()) exoPlayer.seekToPrevious() else exoPlayer.seekTo(0)
                 }
@@ -195,12 +194,12 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                 Box(
                     modifier = Modifier
                         .size(70.dp)
-                        .shadow(5.dp, CircleShape) // Sombra proyectada
+                        .shadow(5.dp, CircleShape)
                         .background(
-                            Brush.radialGradient(listOf(Color.White, wmpNostalgiaBlue)), // Reflejo radial
+                            Brush.radialGradient(listOf(Color.White, wmpNostalgiaBlue)),
                             CircleShape
                         )
-                        .border(2.dp, Color.White.copy(0.7f), CircleShape) // Borde brillante
+                        .border(2.dp, Color.White.copy(0.7f), CircleShape)
                         .clickable { viewModel.alternarReproduccion() },
                     contentAlignment = Alignment.Center
                 ) {
@@ -208,7 +207,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                         if (isPlaying) "⏸" else "▶",
                         color = Color.White,
                         fontSize = 32.sp,
-                        modifier = Modifier.graphicsLayer(shadowElevation = 5f) // Sombra del texto
+                        modifier = Modifier.graphicsLayer(shadowElevation = 5f)
                     )
                 }
 
@@ -219,7 +218,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                 }
             }
 
-            // 6. CONTROL DE VOLUMEN (Estilo integrado)
+            // CONTROL DE VOLUMEN
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
@@ -236,9 +235,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // ====================================================================
-            // NUEVO: BOTÓN PARA CARGAR ARCHIVOS LOCALES (Integrado al diseño retro)
-            // ====================================================================
+            // BOTÓN PARA CARGAR ARCHIVOS LOCALES
             Button(
                 onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
                 modifier = Modifier
@@ -246,7 +243,7 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                     .padding(horizontal = 5.dp)
                     .height(40.dp)
                     .shadow(2.dp, RoundedCornerShape(10.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = metallicSilver), // Gris metálico para combinar
+                colors = ButtonDefaults.buttonColors(containerColor = metallicSilver),
                 border = androidx.compose.foundation.BorderStroke(1.dp, metallicDark),
                 shape = RoundedCornerShape(10.dp),
                 contentPadding = PaddingValues(0.dp)
@@ -256,15 +253,14 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // 7. BOTONES SIMÉTRICOS (Nokia/Windows) - AJUSTADOS PARA NO CORTARSE
+            // BOTONES SIMÉTRICOS (Nokia/Windows)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Botón Inactivo (Transparente con borde plateado)
                 Button(
                     onClick = { viewModel.cambiarTema() },
-                    modifier = Modifier.weight(1f).height(45.dp), // sombra quitada para evitar línea gris
+                    modifier = Modifier.weight(1f).height(45.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                     border = androidx.compose.foundation.BorderStroke(2.dp, metallicDark),
                     shape = RoundedCornerShape(20.dp),
@@ -273,14 +269,13 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                     Text("MODO NOKIA", color = Color(0xFF1A237E), fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
                 }
 
-                // Botón Activo (Azul WMP con relieve)
                 Button(
                     onClick = { },
                     modifier = Modifier.weight(1f).height(45.dp).shadow(4.dp, RoundedCornerShape(20.dp)),
                     colors = ButtonDefaults.buttonColors(containerColor = wmpNostalgiaBlue),
-                    border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(0.5f)), // Brillo borde
+                    border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(0.5f)),
                     shape = RoundedCornerShape(20.dp),
-                    contentPadding = PaddingValues(0.dp) // <--- Quita el relleno interno
+                    contentPadding = PaddingValues(0.dp)
                 ) {
                     Text("MODO WINDOWS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
                 }
@@ -289,14 +284,13 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
     }
 }
 
-// COMPONENTES VISUALES AJUSTADOS PARA EL LOOK RETRO
+// COMPONENTES VISUALES
 
 @Composable
 fun CassetteRetroWmp(isPlaying: Boolean, colorAcento: Color) {
     var angulo by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(isPlaying) { while (isPlaying) { delay(16); angulo += 4f; if (angulo >= 360f) angulo = 0f } }
 
-    // Casete más pequeño y oscuro para que parezca LCD
     Box(modifier = Modifier.size(240.dp, 130.dp).background(Color(0xFF111111), RoundedCornerShape(12.dp)).border(2.dp, colorAcento.copy(alpha = 0.3f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
         Box(modifier = Modifier.size(200.dp, 75.dp).background(Color(0xFF1A1A1A), RoundedCornerShape(8.dp)).border(1.dp, colorAcento.copy(alpha = 0.5f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
             Box(modifier = Modifier.size(80.dp, 30.dp).background(Color.Black, RoundedCornerShape(4.dp)))
@@ -319,10 +313,9 @@ fun EngranajeRetroWmp(angulo: Float, color: Color) {
 
 @Composable
 fun VisualizerOndasRetroWmp(isPlaying: Boolean, color: Color) {
-    var alturas by remember { mutableStateOf(List(20) { 5.dp }) } // Más barras para look LCD túpido
+    var alturas by remember { mutableStateOf(List(20) { 5.dp }) }
     LaunchedEffect(isPlaying) { if (isPlaying) { while (true) { alturas = List(20) { (10..60).random().dp }; delay(150) } } else { alturas = List(20) { 5.dp } } }
 
-    // Caja del EQ integrada abajo de la "pantalla"
     Row(Modifier.fillMaxWidth().height(65.dp).background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(5.dp)).padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
         alturas.forEach { alturaObjetivo ->
             val alturaAnimada by animateDpAsState(targetValue = alturaObjetivo, animationSpec = tween(durationMillis = if (isPlaying) 150 else 500, easing = LinearEasing), label = "eq_bar_retro")
@@ -333,15 +326,14 @@ fun VisualizerOndasRetroWmp(isPlaying: Boolean, color: Color) {
 
 @Composable
 fun RetroWmpControlButton(text: String, bgColor: Color, textColor: Color, size: androidx.compose.ui.unit.Dp, fontSize: androidx.compose.ui.unit.TextUnit, onClick: () -> Unit) {
-    // Degradado sutil para dar volumen al botón (skeuomórfico)
     val buttonGradient = Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.3f), Color.Black.copy(alpha = 0.1f)))
 
     Box(modifier = Modifier
         .size(size)
         .shadow(3.dp, CircleShape)
         .background(bgColor, CircleShape)
-        .background(buttonGradient, CircleShape) // Capa de volumen
-        .border(1.dp, Color.White.copy(0.5f), CircleShape) // Brillo borde
+        .background(buttonGradient, CircleShape)
+        .border(1.dp, Color.White.copy(0.5f), CircleShape)
         .clickable(onClick = onClick),
         contentAlignment = Alignment.Center) {
         Text(text, color = textColor, fontSize = fontSize, fontWeight = FontWeight.Bold)

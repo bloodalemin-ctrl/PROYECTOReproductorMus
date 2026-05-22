@@ -35,11 +35,20 @@ private enum class NokiaViewMode { Album, Cassette, Visualizer }
 @Composable
 fun SeccionNokia(viewModel: ReproductorViewModel) {
     val context = LocalContext.current
-    val exoPlayer = viewModel.exoPlayer
+
+    // ====================================================================
+    // PARCHE DE SEGURIDAD: Espera a que el servicio se conecte para no crashear
+    // ====================================================================
+    val exoPlayer = viewModel.exoPlayer ?: return
+
     val isPlaying = viewModel.isPlaying
 
-    var currentPosition by remember { mutableLongStateOf(0L) }
-    var duration by remember { mutableLongStateOf(0L) }
+    // ====================================================================
+    // SOLUCIÓN AL CONGELAMIENTO: Enlace directo al reloj central del ViewModel
+    // ====================================================================
+    val currentPosition = viewModel.currentPosition
+    val duration = viewModel.duration
+
     var currentView by remember { mutableStateOf(NokiaViewMode.Album) }
     var mostrarMenu by remember { mutableStateOf(false) }
 
@@ -47,6 +56,11 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
     var volume by remember {
         mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
+    }
+
+    // Sincroniza el Slider con el volumen real del Huawei al abrir la pantalla
+    LaunchedEffect(exoPlayer) {
+        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
     }
 
     // ====================================================================
@@ -60,19 +74,6 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
             }
         }
     )
-
-    LaunchedEffect(isPlaying, viewModel.currentTitle) {
-        currentPosition = exoPlayer.currentPosition
-        duration = exoPlayer.duration.coerceAtLeast(0L)
-        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-
-        while (isPlaying) {
-            currentPosition = exoPlayer.currentPosition
-            duration = exoPlayer.duration.coerceAtLeast(0L)
-            volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-            delay(1000L)
-        }
-    }
 
     val blackBackground = Color(0xFF050505)
     val redXpress = Color(0xFFCC0000)
@@ -135,11 +136,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
                         Text(formatTimeNokia(currentPosition), color = redBright, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                         Slider(
                             value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                            onValueChange = {
-                                val newPos = (it * duration).toLong()
-                                exoPlayer.seekTo(newPos)
-                                currentPosition = newPos
-                            },
+                            onValueChange = { val newPos = (it * duration).toLong(); exoPlayer.seekTo(newPos) },
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(20.dp),
                             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = redBright, inactiveTrackColor = redDark)
                         )
@@ -196,9 +193,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // ====================================================================
-            // NUEVO: BOTÓN DE CARGAR MÚSICA (Conectado al Explorador de Archivos)
-            // ====================================================================
+            // BOTÓN DE CARGAR MÚSICA (Conectado al Explorador de Archivos)
             Button(
                 onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
                 modifier = Modifier.fillMaxWidth().height(55.dp),
@@ -216,7 +211,6 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Botón Nokia (Activo)
                 Button(
                     onClick = { },
                     modifier = Modifier.weight(1f).height(55.dp),
@@ -226,7 +220,6 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
                     Text("MODO NOKIA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
 
-                // Botón Windows (Inactivo)
                 Button(
                     onClick = { viewModel.cambiarTema() },
                     modifier = Modifier.weight(1f).height(55.dp),
