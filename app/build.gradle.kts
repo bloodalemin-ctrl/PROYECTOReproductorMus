@@ -53,6 +53,9 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.common)
 
+    // NUEVA LÍNEA PARA EL SERVICIO DE SEGUNDO PLANO Y NOTIFICACIONES
+    implementation("androidx.media3:media3-session:1.2.0")
+
     // Pruebas y Debug
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
