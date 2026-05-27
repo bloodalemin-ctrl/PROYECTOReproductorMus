@@ -34,25 +34,24 @@ private enum class NokiaViewMode { Album, Cassette, Visualizer }
 fun SeccionNokia(viewModel: ReproductorViewModel) {
     val context = LocalContext.current
 
-    // ====================================================================
+
     // PARCHE DE SEGURIDAD: Espera a que el servicio se conecte para no crashear
-    // ====================================================================
+
     val exoPlayer = viewModel.exoPlayer ?: return
 
     val isPlaying = viewModel.isPlaying
 
-    // ====================================================================
     // SOLUCIÓN AL CONGELAMIENTO: Enlace directo al reloj central del ViewModel
-    // ====================================================================
+
     val currentPosition = viewModel.currentPosition
     val duration = viewModel.duration
 
     var currentView by remember { mutableStateOf(NokiaViewMode.Album) }
     var mostrarMenu by remember { mutableStateOf(false) }
 
-    // ====================================================================
-    // CONEXIÓN PARA CARGAR MÚSICA LOCAL (Igual que en Windows)
-    // ====================================================================
+
+    // CONEXIÓN PARA CARGAR MÚSICA LOCAL
+
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
         onResult = { uris ->
