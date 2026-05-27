@@ -49,7 +49,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     private val sharedPreferences = application.getSharedPreferences("BibliotecaPrefs", Context.MODE_PRIVATE)
 
     // ====================================================================
-    // SOLUCIÓN DEFINITIVA: Interceptor de botones físicos del celular
+    //  Interceptor de botones físicos del celular
     // ====================================================================
     private val volumeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -204,7 +204,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
             val nombreReal = obtenerNombreArchivo(uri)
             val metadatos = MediaMetadata.Builder()
                 .setTitle(nombreReal)
-                .setArtist("Memoria del Teléfono")
+                .setArtist("Mp3")
                 .build()
             MediaItem.Builder()
                 .setUri(uri)
