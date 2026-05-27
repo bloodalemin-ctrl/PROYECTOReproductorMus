@@ -1,8 +1,14 @@
 package com.example.reproductor
 
 import android.app.Application
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
@@ -36,7 +42,38 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     private var jobProgreso: Job? = null
     // ====================================================================
 
+    // Control de volumen sincronizado
+    var currentVolume by mutableFloatStateOf(1f)
+
+    // VAR DE ALMACENAMIENTO PERSISTENTE
+    private val sharedPreferences = application.getSharedPreferences("BibliotecaPrefs", Context.MODE_PRIVATE)
+
+    // ====================================================================
+    // SOLUCIÓN DEFINITIVA: Interceptor de botones físicos del celular
+    // ====================================================================
+    private val volumeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
+                val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
+                val vol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                if (maxVol > 0) {
+                    currentVolume = vol / maxVol
+                }
+            }
+        }
+    }
+
     init {
+        // Inicializamos el volumen leyendo cómo está el celular en este momento
+        val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
+        val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+        currentVolume = if (maxVol > 0) currentVol / maxVol else 1f
+
+        // Registramos el interceptor en Android para escuchar la acción de subir/bajar volumen
+        application.registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"))
+
         val sessionToken = SessionToken(application, ComponentName(application, ReproductorService::class.java))
         controllerFuture = MediaController.Builder(application, sessionToken).buildAsync()
 
@@ -128,6 +165,9 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
             val playlistFinal = mutableListOf(localItem)
             playlistFinal.addAll(listaInternet)
 
+            // Inyecta las canciones mp3 cargadas al arrancar la App a la cola
+            playlistFinal.addAll(cargarCancionesLocalesPersistentes())
+
             player.setMediaItems(playlistFinal)
             player.prepare()
             player.playWhenReady = false
@@ -136,15 +176,100 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // Funcion para extraer el nombre real del archivo mp3
+    private fun obtenerNombreArchivo(uri: Uri): String {
+        var nombre = "Archivo Local"
+        val cursor = getApplication<Application>().contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index != -1) {
+                    nombre = it.getString(index)
+                    nombre = nombre.substringBeforeLast(".")
+                }
+            }
+        }
+        return nombre
+    }
+
     fun agregarCancionesLocales(uris: List<Uri>) {
         val player = exoPlayer ?: return
         val posicionDeInsercion = player.mediaItemCount
-        val nuevosItems = uris.map { uri -> MediaItem.Builder().setUri(uri).build() }
+
+        // Para guardar las caniones siempre en la cola
+        guardarCancionesLocalesPersistentes(uris)
+
+        // Se inyecta el titulo extraido
+        val nuevosItems = uris.map { uri ->
+            val nombreReal = obtenerNombreArchivo(uri)
+            val metadatos = MediaMetadata.Builder()
+                .setTitle(nombreReal)
+                .setArtist("Memoria del Teléfono")
+                .build()
+            MediaItem.Builder()
+                .setUri(uri)
+                .setMediaMetadata(metadatos)
+                .build()
+        }
 
         player.addMediaItems(nuevosItems)
         player.seekTo(posicionDeInsercion, 0L)
         player.prepare()
         player.play()
+    }
+
+    // Funcion que hace que Android no olvide los permisos temporales y los haga permanentes
+    private fun guardarCancionesLocalesPersistentes(uris: List<Uri>) {
+        val contenidoResolver = getApplication<Application>().contentResolver
+        val conjuntoExistente = sharedPreferences.getStringSet("lista_uris", emptySet()) ?: emptySet()
+        val nuevoConjunto = conjuntoExistente.toMutableSet()
+
+        uris.forEach { uri ->
+            try {
+                // Con esto se le pide a Android que nos de acceso permanente de lectura
+                contenidoResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+                nuevoConjunto.add(uri.toString())
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        sharedPreferences.edit().putStringSet("lista_uris", nuevoConjunto).apply()
+    }
+
+    private fun cargarCancionesLocalesPersistentes(): List<MediaItem> {
+        val conjuntoUris = sharedPreferences.getStringSet("lista_uris", emptySet()) ?: emptySet()
+        val listaItems = mutableListOf<MediaItem>()
+
+        conjuntoUris.forEach { uriString ->
+            try {
+                val uri = Uri.parse(uriString)
+                val nombreReal = obtenerNombreArchivo(uri)
+                val metadatos = MediaMetadata.Builder()
+                    .setTitle(nombreReal)
+                    .setArtist("Memoria del Teléfono")
+                    .build()
+                val item = MediaItem.Builder()
+                    .setUri(uri)
+                    .setMediaMetadata(metadatos)
+                    .build()
+                listaItems.add(item)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return listaItems
+    }
+
+    // Funcion para cambiar el volumen desde el Slider con el dedo
+    fun cambiarVolumen(nuevoVolumen: Float) {
+        currentVolume = nuevoVolumen
+        val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        // Le mandamos la instrucción directa a la tarjeta de sonido del celular para modificar el hardware
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (nuevoVolumen * maxVol).toInt(), 0)
     }
 
     fun alternarReproduccion() {
@@ -159,6 +284,8 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     override fun onCleared() {
         super.onCleared()
         detenerRelojProgreso()
+        // Apagamos el interceptor al destruir el ViewModel para evitar fugas de memoria
+        getApplication<Application>().unregisterReceiver(volumeReceiver)
         MediaController.releaseFuture(controllerFuture)
     }
 }
