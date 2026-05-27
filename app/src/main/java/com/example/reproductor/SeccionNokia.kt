@@ -1,10 +1,6 @@
-
-
 @file:OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 package com.example.reproductor
 
-import android.content.Context
-import android.media.AudioManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -53,17 +49,6 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
     var currentView by remember { mutableStateOf(NokiaViewMode.Album) }
     var mostrarMenu by remember { mutableStateOf(false) }
-
-    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
-    var volume by remember {
-        mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
-    }
-
-    // Sincroniza el Slider con el volumen real del Huawei al abrir la pantalla
-    LaunchedEffect(exoPlayer) {
-        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-    }
 
     // ====================================================================
     // CONEXIÓN PARA CARGAR MÚSICA LOCAL (Igual que en Windows)
@@ -181,12 +166,12 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // VOLUMEN
+            // VOLUMEN (Conectado al ViewModel)
             Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1A1A1A), RoundedCornerShape(20.dp)).padding(horizontal = 15.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🔈", color = grayText, fontSize = 18.sp)
                 Slider(
-                    value = volume,
-                    onValueChange = { volume = it; try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0) } catch (_: SecurityException) {} },
+                    value = viewModel.currentVolume,
+                    onValueChange = { viewModel.cambiarVolumen(it) },
                     modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = redBright, inactiveTrackColor = redDark)
                 )
@@ -237,7 +222,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(12) { Box(modifier = Modifier.size(width = 6.dp, height = 12.dp).background(Color(0xFF222222), CircleShape)) } }
         }
 
-        // MENÚ
+        // MENÚ ORIGINAL INTACTO
         if (mostrarMenu) {
             Column(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.95f)).padding(30.dp)) {
                 Text("MENU", color = redBright, fontWeight = FontWeight.Bold, fontSize = 24.sp, fontFamily = FontFamily.Monospace)

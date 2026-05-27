@@ -1,4 +1,3 @@
-
 @file:OptIn(
     androidx.media3.common.util.UnstableApi::class,
     androidx.compose.animation.ExperimentalAnimationApi::class,
@@ -6,8 +5,6 @@
 )
 package com.example.reproductor
 
-import android.content.Context
-import android.media.AudioManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
@@ -50,15 +47,6 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
     // ====================================================================
     val currentPosition = viewModel.currentPosition
     val duration = viewModel.duration
-
-    val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
-    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat() }
-    var volume by remember { mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume) }
-
-    // Sincroniza el Slider con el volumen real del Huawei al abrir la pantalla
-    LaunchedEffect(exoPlayer) {
-        volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
-    }
 
     // ====================================================================
     // LANZADOR DEL EXPLORADOR DE ARCHIVOS (Para cargar música local)
@@ -219,15 +207,15 @@ fun WmpThemeScreen(viewModel: ReproductorViewModel) {
                 }
             }
 
-            // CONTROL DE VOLUMEN
+            // CONTROL DE VOLUMEN (Conectado al ViewModel)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)
             ) {
                 Text("🔈", color = Color(0xFF1A237E), fontSize = 16.sp)
                 Slider(
-                    value = volume,
-                    onValueChange = { volume = it; try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (it * maxVolume).toInt(), 0) } catch (_: SecurityException) {} },
+                    value = viewModel.currentVolume,
+                    onValueChange = { viewModel.cambiarVolumen(it) },
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                     colors = SliderDefaults.colors(thumbColor = metallicSilver, activeTrackColor = wmpNostalgiaBlue, inactiveTrackColor = Color.Black.copy(0.3f))
                 )
