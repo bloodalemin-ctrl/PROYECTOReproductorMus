@@ -23,6 +23,9 @@ import kotlinx.coroutines.*
 
 data class EstadoTema(val esNokia: Boolean = false)
 
+// MODELO DE DATOS REQUERIDO PARA LA BIBLIOTECA DESLIZABLE (Xiadani)
+data class Cancion(val titulo: String, val artista: String, val uri: Uri?)
+
 class ReproductorViewModel(application: Application) : AndroidViewModel(application) {
 
     var exoPlayer by mutableStateOf<Player?>(null)
@@ -34,23 +37,20 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     var currentTitle by mutableStateOf("Conectando al sistema...")
     var currentArtist by mutableStateOf("Espere por favor")
 
-    // ====================================================================
-    // NUEVAS VARIABLES DE ESTADO: Controladas directamente por el ViewModel
-    // ====================================================================
     var currentPosition by mutableLongStateOf(0L)
     var duration by mutableLongStateOf(0L)
     private var jobProgreso: Job? = null
-    // ====================================================================
 
-    // Control de volumen sincronizado
+    // TUS VARIABLES ORIGINALES (Volumen y Control de Modos)
     var currentVolume by mutableFloatStateOf(1f)
+    var isShuffleEnabled by mutableStateOf(false)
+    var isRepeatOne by mutableStateOf(false)
 
-    // VAR DE ALMACENAMIENTO PERSISTENTE
     private val sharedPreferences = application.getSharedPreferences("BibliotecaPrefs", Context.MODE_PRIVATE)
 
-    // ====================================================================
-    //  Interceptor de botones físicos del celular
-    // ====================================================================
+    // LA LISTA REAL DE LA BIBLIOTECA: Sincronizada con Compose y Media3 (Xiadani)
+    val listaCanciones = mutableStateListOf<Cancion>()
+
     private val volumeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "android.media.VOLUME_CHANGED_ACTION") {
@@ -65,13 +65,11 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     init {
-        // Inicializamos el volumen leyendo cómo está el celular en este momento
         val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
         val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
         currentVolume = if (maxVol > 0) currentVol / maxVol else 1f
 
-        // Registramos el interceptor en Android para escuchar la acción de subir/bajar volumen
         application.registerReceiver(volumeReceiver, IntentFilter("android.media.VOLUME_CHANGED_ACTION"))
 
         val sessionToken = SessionToken(application, ComponentName(application, ReproductorService::class.java))
@@ -83,17 +81,18 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
             setupPlayer(controller)
             cargarPlaylistHibrida(application, controller)
 
-            // Sincronizar estado actual de inmediato al conectar o reconectar
             isPlaying = controller.isPlaying
             duration = controller.duration.coerceAtLeast(0L)
             currentPosition = controller.currentPosition
+
+            isShuffleEnabled = controller.shuffleModeEnabled
+            isRepeatOne = controller.repeatMode == Player.REPEAT_MODE_ONE
 
             if (controller.mediaMetadata.title != null) {
                 currentTitle = controller.mediaMetadata.title.toString()
                 currentArtist = controller.mediaMetadata.artist?.toString() ?: "Artista Desconocido"
             }
 
-            // Arrancar el reloj si ya venía reproduciéndose de fondo
             if (isPlaying) arrancarRelojProgreso(controller)
 
         }, ContextCompat.getMainExecutor(application))
@@ -124,14 +123,14 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         })
     }
 
-    // Corrutina que actualiza los segundos en tiempo real sin congelarse
+    // TU FLUIDEZ: ¡A 30 MS! (Ale)
     private fun arrancarRelojProgreso(player: Player) {
         detenerRelojProgreso()
         jobProgreso = CoroutineScope(Dispatchers.Main).launch {
             while (isActive) {
                 currentPosition = player.currentPosition
                 duration = player.duration.coerceAtLeast(0L)
-                delay(1000L)
+                delay(30L)
             }
         }
     }
@@ -143,11 +142,24 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun cargarPlaylistHibrida(app: Application, player: Player) {
         try {
-            if (player.mediaItemCount > 0) return
+            if (player.mediaItemCount > 0) {
+                if (listaCanciones.isEmpty()) {
+                    for (i in 0 until player.mediaItemCount) {
+                        val item = player.getMediaItemAt(i)
+                        listaCanciones.add(Cancion(
+                            titulo = item.mediaMetadata.title?.toString() ?: "Pista $i",
+                            artista = item.mediaMetadata.artist?.toString() ?: "Artista Desconocido",
+                            uri = item.localConfiguration?.uri
+                        ))
+                    }
+                }
+                return
+            }
 
-            val uriLocal = "android.resource://${app.packageName}/raw/cancion_retro"
-            val localMeta = MediaMetadata.Builder().setTitle("Pista Local Retro").setArtist("Nokia Demo").build()
-            val localItem = MediaItem.Builder().setUri(uriLocal).setMediaMetadata(localMeta).build()
+            listaCanciones.clear()
+
+            val uriLocal = Uri.parse("android.resource://${app.packageName}/raw/cancion_retro")
+            listaCanciones.add(Cancion("Pista Local Retro", "Nokia Demo", uriLocal))
 
             val misCanciones = listOf(
                 Triple("BaileEee InolvidableEeEE", "Bad Bunny", "1zpq4gIaB9VyFw41VmIjZRfnCL1ssU84r"),
@@ -156,19 +168,34 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
                 Triple("PasarelaAAAAA", "Daddy Yankee", "14jYGHEMy56I6I2wy_H-pijuOnQqA_j0T")
             )
 
-            val listaInternet = misCanciones.map { (titulo, artista, id) ->
-                val urlDirecta = "https://drive.google.com/uc?export=download&id=$id"
-                val metadatos = MediaMetadata.Builder().setTitle(titulo).setArtist(artista).build()
-                MediaItem.Builder().setUri(urlDirecta).setMediaMetadata(metadatos).build()
+            misCanciones.forEach { (titulo, artista, id) ->
+                val urlDirecta = Uri.parse("https://drive.google.com/uc?export=download&id=$id")
+                listaCanciones.add(Cancion(titulo, artista, urlDirecta))
             }
 
-            val playlistFinal = mutableListOf(localItem)
-            playlistFinal.addAll(listaInternet)
+            // Agregamos también las canciones persistentes
+            val persistentes = cargarCancionesLocalesPersistentes()
+            persistentes.forEach { item ->
+                listaCanciones.add(Cancion(
+                    titulo = item.mediaMetadata.title?.toString() ?: "Local",
+                    artista = item.mediaMetadata.artist?.toString() ?: "Dispositivo",
+                    uri = item.localConfiguration?.uri
+                ))
+            }
 
-            // Inyecta las canciones mp3 cargadas al arrancar la App a la cola
-            playlistFinal.addAll(cargarCancionesLocalesPersistentes())
+            val mediaItems = listaCanciones.map { cancion ->
+                MediaItem.Builder()
+                    .setUri(cancion.uri!!)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(cancion.titulo)
+                            .setArtist(cancion.artista)
+                            .build()
+                    )
+                    .build()
+            }
 
-            player.setMediaItems(playlistFinal)
+            player.setMediaItems(mediaItems)
             player.prepare()
             player.playWhenReady = false
         } catch (e: Exception) {
@@ -176,9 +203,36 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    // Funcion para extraer el nombre real del archivo mp3
+    fun agregarCancionesLocales(uris: List<Uri>) {
+        val player = exoPlayer ?: return
+        val posicionDeInsercion = player.mediaItemCount
+        guardarCancionesLocalesPersistentes(uris)
+
+        uris.forEach { uri ->
+            val nombreArchivo = obtenerNombreArchivo(uri)
+            val nuevaCancion = Cancion(nombreArchivo, "Memoria del Teléfono", uri)
+            listaCanciones.add(nuevaCancion)
+
+            val mediaItem = MediaItem.Builder()
+                .setUri(uri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(nombreArchivo)
+                        .setArtist("Memoria del Teléfono")
+                        .build()
+                )
+                .build()
+
+            player.addMediaItem(mediaItem)
+        }
+
+        player.seekTo(posicionDeInsercion, 0L)
+        player.prepare()
+        player.play()
+    }
+
     private fun obtenerNombreArchivo(uri: Uri): String {
-        var nombre = "Archivo Local"
+        var nombre = "Audio Local"
         val cursor = getApplication<Application>().contentResolver.query(uri, null, null, null, null)
         cursor?.use {
             if (it.moveToFirst()) {
@@ -192,33 +246,6 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         return nombre
     }
 
-    fun agregarCancionesLocales(uris: List<Uri>) {
-        val player = exoPlayer ?: return
-        val posicionDeInsercion = player.mediaItemCount
-
-        // Para guardar las caniones siempre en la cola
-        guardarCancionesLocalesPersistentes(uris)
-
-        // Se inyecta el titulo extraido
-        val nuevosItems = uris.map { uri ->
-            val nombreReal = obtenerNombreArchivo(uri)
-            val metadatos = MediaMetadata.Builder()
-                .setTitle(nombreReal)
-                .setArtist("Mp3")
-                .build()
-            MediaItem.Builder()
-                .setUri(uri)
-                .setMediaMetadata(metadatos)
-                .build()
-        }
-
-        player.addMediaItems(nuevosItems)
-        player.seekTo(posicionDeInsercion, 0L)
-        player.prepare()
-        player.play()
-    }
-
-    // Funcion que hace que Android no olvide los permisos temporales y los haga permanentes
     private fun guardarCancionesLocalesPersistentes(uris: List<Uri>) {
         val contenidoResolver = getApplication<Application>().contentResolver
         val conjuntoExistente = sharedPreferences.getStringSet("lista_uris", emptySet()) ?: emptySet()
@@ -226,15 +253,9 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
 
         uris.forEach { uri ->
             try {
-                // Con esto se le pide a Android que nos de acceso permanente de lectura
-                contenidoResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
+                contenidoResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 nuevoConjunto.add(uri.toString())
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
         sharedPreferences.edit().putStringSet("lista_uris", nuevoConjunto).apply()
     }
@@ -247,34 +268,45 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 val uri = Uri.parse(uriString)
                 val nombreReal = obtenerNombreArchivo(uri)
-                val metadatos = MediaMetadata.Builder()
-                    .setTitle(nombreReal)
-                    .setArtist("Memoria del Teléfono")
-                    .build()
-                val item = MediaItem.Builder()
-                    .setUri(uri)
-                    .setMediaMetadata(metadatos)
-                    .build()
+                val metadatos = MediaMetadata.Builder().setTitle(nombreReal).setArtist("Memoria del Teléfono").build()
+                val item = MediaItem.Builder().setUri(uri).setMediaMetadata(metadatos).build()
                 listaItems.add(item)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
         return listaItems
     }
 
-    // Funcion para cambiar el volumen desde el Slider con el dedo
     fun cambiarVolumen(nuevoVolumen: Float) {
         currentVolume = nuevoVolumen
         val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
         val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        // Le mandamos la instrucción directa a la tarjeta de sonido del celular para modificar el hardware
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (nuevoVolumen * maxVol).toInt(), 0)
     }
 
     fun alternarReproduccion() {
         val player = exoPlayer ?: return
         if (player.isPlaying) player.pause() else player.play()
+    }
+
+    fun toggleShuffle() {
+        val player = exoPlayer ?: return
+        isShuffleEnabled = !isShuffleEnabled
+        player.shuffleModeEnabled = isShuffleEnabled
+    }
+
+    fun toggleRepeat() {
+        val player = exoPlayer ?: return
+        isRepeatOne = !isRepeatOne
+        player.repeatMode = if (isRepeatOne) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_ALL
+    }
+
+    fun reproducirCancionEnPosicion(index: Int) {
+        val player = exoPlayer ?: return
+        if (index in 0 until player.mediaItemCount) {
+            player.seekTo(index, 0L)
+            player.prepare()
+            player.play()
+        }
     }
 
     fun cambiarTema() {
@@ -284,7 +316,6 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     override fun onCleared() {
         super.onCleared()
         detenerRelojProgreso()
-        // Apagamos el interceptor al destruir el ViewModel para evitar fugas de memoria
         getApplication<Application>().unregisterReceiver(volumeReceiver)
         MediaController.releaseFuture(controllerFuture)
     }
