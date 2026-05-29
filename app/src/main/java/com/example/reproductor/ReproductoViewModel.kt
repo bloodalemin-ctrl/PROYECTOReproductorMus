@@ -17,6 +17,11 @@ import kotlinx.coroutines.*
 
 data class EstadoTema(val esNokia: Boolean = false)
 
+// ====================================================================
+// MODELO DE DATOS REQUERIDO PARA LA BIBLIOTECA DESLIZABLE
+// ====================================================================
+data class Cancion(val titulo: String, val artista: String, val uri: Uri?)
+
 class ReproductorViewModel(application: Application) : AndroidViewModel(application) {
 
     var exoPlayer by mutableStateOf<Player?>(null)
@@ -28,13 +33,14 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     var currentTitle by mutableStateOf("Conectando al sistema...")
     var currentArtist by mutableStateOf("Espere por favor")
 
-    // ====================================================================
-    // NUEVAS VARIABLES DE ESTADO: Controladas directamente por el ViewModel
-    // ====================================================================
     var currentPosition by mutableLongStateOf(0L)
     var duration by mutableLongStateOf(0L)
     private var jobProgreso: Job? = null
+
     // ====================================================================
+    // LA LISTA REAL DE LA BIBLIOTECA: Sincronizada con Compose y Media3
+    // ====================================================================
+    val listaCanciones = mutableStateListOf<Cancion>()
 
     init {
         val sessionToken = SessionToken(application, ComponentName(application, ReproductorService::class.java))
@@ -106,12 +112,28 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
 
     private fun cargarPlaylistHibrida(app: Application, player: Player) {
         try {
-            if (player.mediaItemCount > 0) return
+            // Si el servicio ya contiene pistas cargadas, las recuperamos para inflar la biblioteca
+            if (player.mediaItemCount > 0) {
+                if (listaCanciones.isEmpty()) {
+                    for (i in 0 until player.mediaItemCount) {
+                        val item = player.getMediaItemAt(i)
+                        listaCanciones.add(Cancion(
+                            titulo = item.mediaMetadata.title?.toString() ?: "Pista $i",
+                            artista = item.mediaMetadata.artist?.toString() ?: "Artista Desconocido",
+                            uri = item.localConfiguration?.uri
+                        ))
+                    }
+                }
+                return
+            }
 
-            val uriLocal = "android.resource://${app.packageName}/raw/cancion_retro"
-            val localMeta = MediaMetadata.Builder().setTitle("Pista Local Retro").setArtist("Nokia Demo").build()
-            val localItem = MediaItem.Builder().setUri(uriLocal).setMediaMetadata(localMeta).build()
+            listaCanciones.clear()
 
+            // 1. Añadir canción local fija de la carpeta raw
+            val uriLocal = Uri.parse("android.resource://${app.packageName}/raw/cancion_retro")
+            listaCanciones.add(Cancion("Pista Local Retro", "Nokia Demo", uriLocal))
+
+            // 2. Definir lista remota de Google Drive
             val misCanciones = listOf(
                 Triple("BaileEee InolvidableEeEE", "Bad Bunny", "1zpq4gIaB9VyFw41VmIjZRfnCL1ssU84r"),
                 Triple("Es un secretoOOOO", "Plan B", "1S-P_hPui-qQpqkixxqBKn1iVy4JhM642"),
@@ -119,16 +141,25 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
                 Triple("PasarelaAAAAA", "Daddy Yankee", "14jYGHEMy56I6I2wy_H-pijuOnQqA_j0T")
             )
 
-            val listaInternet = misCanciones.map { (titulo, artista, id) ->
-                val urlDirecta = "https://drive.google.com/uc?export=download&id=$id"
-                val metadatos = MediaMetadata.Builder().setTitle(titulo).setArtist(artista).build()
-                MediaItem.Builder().setUri(urlDirecta).setMediaMetadata(metadatos).build()
+            misCanciones.forEach { (titulo, artista, id) ->
+                val urlDirecta = Uri.parse("https://drive.google.com/uc?export=download&id=$id")
+                listaCanciones.add(Cancion(titulo, artista, urlDirecta))
             }
 
-            val playlistFinal = mutableListOf(localItem)
-            playlistFinal.addAll(listaInternet)
+            // Mapeamos nuestra lista de canciones internas al formato MediaItem exigido por Media3
+            val mediaItems = listaCanciones.map { cancion ->
+                MediaItem.Builder()
+                    .setUri(cancion.uri)
+                    .setMediaMetadata(
+                        MediaMetadata.Builder()
+                            .setTitle(cancion.titulo)
+                            .setArtist(cancion.artista)
+                            .build()
+                    )
+                    .build()
+            }
 
-            player.setMediaItems(playlistFinal)
+            player.setMediaItems(mediaItems)
             player.prepare()
             player.playWhenReady = false
         } catch (e: Exception) {
@@ -138,13 +169,40 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
 
     fun agregarCancionesLocales(uris: List<Uri>) {
         val player = exoPlayer ?: return
-        val posicionDeInsercion = player.mediaItemCount
-        val nuevosItems = uris.map { uri -> MediaItem.Builder().setUri(uri).build() }
 
-        player.addMediaItems(nuevosItems)
-        player.seekTo(posicionDeInsercion, 0L)
+        uris.forEach { uri ->
+            // Extraer un nombre legible del archivo para que la biblioteca se vea limpia
+            val nombreArchivo = uri.lastPathSegment?.substringAfterLast("/")?.substringBeforeLast(".") ?: "Audio Local"
+            val nuevaCancion = Cancion(nombreArchivo, "Dispositivo", uri)
+
+            listaCanciones.add(nuevaCancion)
+
+            val mediaItem = MediaItem.Builder()
+                .setUri(uri)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(nombreArchivo)
+                        .setArtist("Dispositivo")
+                        .build()
+                )
+                .build()
+
+            player.addMediaItem(mediaItem)
+        }
+
         player.prepare()
-        player.play()
+    }
+
+    // ====================================================================
+    // NUEVA FUNCIÓN: Ejecuta el salto directo desde el BottomSheet deslizable
+    // ====================================================================
+    fun reproducirCancionEnPosicion(index: Int) {
+        val player = exoPlayer ?: return
+        if (index in 0 until player.mediaItemCount) {
+            player.seekTo(index, 0L)
+            player.prepare()
+            player.play()
+        }
     }
 
     fun alternarReproduccion() {

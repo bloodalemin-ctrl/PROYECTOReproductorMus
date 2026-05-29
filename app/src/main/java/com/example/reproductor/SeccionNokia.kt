@@ -10,6 +10,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +36,10 @@ import kotlinx.coroutines.delay
 private enum class NokiaViewMode { Album, Cassette, Visualizer }
 
 @Composable
-fun SeccionNokia(viewModel: ReproductorViewModel) {
+fun SeccionNokia(
+    viewModel: ReproductorViewModel,
+    onAbrirBiblioteca: () -> Unit // Recibe la señal para levantar el BottomSheet
+) {
     val context = LocalContext.current
 
     // ====================================================================
@@ -58,13 +64,13 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
         mutableFloatStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
     }
 
-    // Sincroniza el Slider con el volumen real del Huawei al abrir la pantalla
+    // Sincroniza el Slider con el volumen real al abrir la pantalla
     LaunchedEffect(exoPlayer) {
         volume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume
     }
 
     // ====================================================================
-    // CONEXIÓN PARA CARGAR MÚSICA LOCAL (Igual que en Windows)
+    // CONEXIÓN PARA CARGAR MÚSICA LOCAL
     // ====================================================================
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
@@ -85,7 +91,23 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().background(blackBackground).padding(horizontal = 16.dp, vertical = 20.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(blackBackground)
+                .navigationBarsPadding() // Agregado para protección de UI inferior
+                // ====================================================================
+                // GESTO TÁCTIL EN NOKIA: Detecta si arrastras el dedo hacia abajo en el chasis
+                // ====================================================================
+                .draggable(
+                    orientation = Orientation.Vertical,
+                    state = rememberDraggableState { delta ->
+                        // Si arrastras el dedo hacia abajo con suficiente fuerza
+                        if (delta > 15f) {
+                            onAbrirBiblioteca()
+                        }
+                    }
+                )
+                .padding(horizontal = 16.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
@@ -193,7 +215,7 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // BOTÓN DE CARGAR MÚSICA (Conectado al Explorador de Archivos)
+            // BOTÓN DE CARGAR MÚSICA
             Button(
                 onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
                 modifier = Modifier.fillMaxWidth().height(55.dp),
@@ -235,23 +257,42 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(12) { Box(modifier = Modifier.size(width = 6.dp, height = 12.dp).background(Color(0xFF222222), CircleShape)) } }
         }
 
-        // MENÚ
+        // MENÚ DE OPCIONES DEL NOKIA (Mantenemos la opción manual también)
         if (mostrarMenu) {
             Column(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.95f)).padding(30.dp)) {
                 Text("MENU", color = redBright, fontWeight = FontWeight.Bold, fontSize = 24.sp, fontFamily = FontFamily.Monospace)
                 Spacer(modifier = Modifier.height(20.dp))
-                val opciones = listOf("🎵 Pistas", "❌ Cerrar Menú")
-                opciones.forEach { opcion ->
-                    Text(text = opcion, color = Color.White, modifier = Modifier.fillMaxWidth().clickable { mostrarMenu = false }.padding(vertical = 15.dp), fontSize = 18.sp)
-                    HorizontalDivider(color = Color.DarkGray)
-                }
+
+                Text(
+                    text = "🎵 Pistas",
+                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            mostrarMenu = false
+                            onAbrirBiblioteca()
+                        }
+                        .padding(vertical = 15.dp),
+                    fontSize = 18.sp
+                )
+                HorizontalDivider(color = Color.DarkGray)
+
+                Text(
+                    text = "❌ Cerrar Menú",
+                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { mostrarMenu = false }
+                        .padding(vertical = 15.dp),
+                    fontSize = 18.sp
+                )
+                HorizontalDivider(color = Color.DarkGray)
             }
         }
     }
 }
 
-@Composable
-fun NokiaAlbum() { Box(modifier = Modifier.size(140.dp).background(Color(0xFF111111), RoundedCornerShape(8.dp)).border(2.dp, Color(0xFF660000), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) { Text("💿", fontSize = 70.sp) } }
+@Composable fun NokiaAlbum() { Box(modifier = Modifier.size(140.dp).background(Color(0xFF111111), RoundedCornerShape(8.dp)).border(2.dp, Color(0xFF660000), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) { Text("💿", fontSize = 70.sp) } }
 
 @Composable
 fun NokiaVisualizer(isPlaying: Boolean, color: Color) {
@@ -279,7 +320,5 @@ fun NokiaCassette(isPlaying: Boolean, colorAcento: Color) {
     }
 }
 
-@Composable
-fun NokiaEngranaje(angulo: Float, color: Color) { Box(modifier = Modifier.size(30.dp).graphicsLayer(rotationZ = angulo).background(Color.Black, CircleShape).border(2.dp, color, CircleShape), contentAlignment = Alignment.Center) { Box(Modifier.width(2.dp).height(30.dp).background(color)); Box(Modifier.width(30.dp).height(2.dp).background(color)); Box(Modifier.size(10.dp).background(color, CircleShape)) } }
-
+@Composable fun NokiaEngranaje(angulo: Float, color: Color) { Box(modifier = Modifier.size(30.dp).graphicsLayer(rotationZ = angulo).background(Color.Black, CircleShape).border(2.dp, color, CircleShape), contentAlignment = Alignment.Center) { Box(Modifier.width(2.dp).height(30.dp).background(color)); Box(Modifier.width(30.dp).height(2.dp).background(color)); Box(Modifier.size(10.dp).background(color, CircleShape)) } }
 fun formatTimeNokia(ms: Long): String { if (ms < 0) return "00:00"; val totalSeconds = ms / 1000; return String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60) }
