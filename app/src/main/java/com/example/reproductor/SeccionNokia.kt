@@ -40,7 +40,7 @@ private enum class NokiaViewMode { Album, Cassette, Visualizer }
 @Composable
 fun SeccionNokia(
     viewModel: ReproductorViewModel,
-    onAbrirBiblioteca: () -> Unit // Recibe la señal para levantar el BottomSheet (Xiadani)
+    onAbrirBiblioteca: () -> Unit
 ) {
     val context = LocalContext.current
     val exoPlayer = viewModel.exoPlayer ?: return
@@ -51,11 +51,10 @@ fun SeccionNokia(
 
     var currentView by remember { mutableStateOf(NokiaViewMode.Album) }
     var mostrarMenu by remember { mutableStateOf(false) }
-
-    // TUS VARIABLES (Ale): Slider fluido seguro
+    
     var isDraggingProgreso by remember { mutableStateOf(false) }
     var progresoLocal by remember { mutableFloatStateOf(0f) }
-    val coroutineScope = rememberCoroutineScope()
+    val coroutineScope = rememberCoroutineScope() 
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
@@ -78,7 +77,6 @@ fun SeccionNokia(
                 .fillMaxSize()
                 .background(blackBackground)
                 .navigationBarsPadding()
-                // GESTO TÁCTIL (Xiadani): Detecta si arrastras el dedo hacia abajo en el chasis
                 .draggable(
                     orientation = Orientation.Vertical,
                     state = rememberDraggableState { delta ->
@@ -130,20 +128,19 @@ fun SeccionNokia(
 
                     Spacer(modifier = Modifier.height(5.dp))
 
-                    // TU SLIDER (Ale): Seguro contra "efecto liga"
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         val textoTiempo = if (isDraggingProgreso) (progresoLocal * duration).toLong() else currentPosition
                         Text(formatTimeNokia(textoTiempo), color = redBright, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-
+                        
                         Slider(
                             value = if (isDraggingProgreso) progresoLocal else if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                            onValueChange = {
+                            onValueChange = { 
                                 isDraggingProgreso = true
-                                progresoLocal = it
+                                progresoLocal = it 
                             },
                             onValueChangeFinished = {
                                 val nuevaPosicion = (progresoLocal * duration).toLong()
-                                viewModel.currentPosition = nuevaPosicion
+                                viewModel.currentPosition = nuevaPosicion 
                                 exoPlayer.seekTo(nuevaPosicion)
                                 coroutineScope.launch {
                                     delay(200)
@@ -162,32 +159,24 @@ fun SeccionNokia(
             Text("👆 Toca la pantalla para cambiar animación", color = grayText, fontSize = 11.sp)
             Spacer(modifier = Modifier.height(15.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.Center // <-- ¡Esta es la clave!
-            ) {
-                Text(
-                    text = "NOKIA",
-                    color = grayText.copy(alpha = 0.4f),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 2.sp
-                )
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Options", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { mostrarMenu = true })
+                Text("NOKIA", color = grayText.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+                Text("Back", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // TUS BOTONES (Ale): 5 Botones visualmente reactivos
             Row(
                 modifier = Modifier.fillMaxWidth().background(Color(0xFF111111), RoundedCornerShape(40.dp)).padding(10.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val iconRepeat = if (viewModel.isRepeatOne) "🔂" else "🔁"
-                val bgRepeat = if (viewModel.isRepeatOne) redDark else Color.Black
-                val borderRepeat = if (viewModel.isRepeatOne) redBright else Color.DarkGray
+                val bgRepeat = if (viewModel.isRepeatOne) redDark else Color.Black 
+                val borderRepeat = if (viewModel.isRepeatOne) redBright else Color.DarkGray 
                 Box(modifier = Modifier.size(45.dp).clip(CircleShape).background(bgRepeat).border(1.dp, borderRepeat, CircleShape)
-                    .clickable {
+                    .clickable { 
                         viewModel.toggleRepeat()
                         val msj = if (viewModel.isRepeatOne) "Repetir esta canción" else "Repetición apagada"
                         Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
@@ -205,12 +194,12 @@ fun SeccionNokia(
                 Box(modifier = Modifier.size(55.dp, 50.dp).clip(RoundedCornerShape(25.dp)).background(glossyRedButton).border(1.dp, Color(0xFFFF6666).copy(0.5f), RoundedCornerShape(25.dp))
                     .clickable { if (exoPlayer.hasNextMediaItem()) exoPlayer.seekToNext() },
                     contentAlignment = Alignment.Center) { Text("⏭", color = Color.White, fontSize = 18.sp) }
-
+                    
                 val iconShuffle = "🔀"
-                val bgShuffle = if (viewModel.isShuffleEnabled) redDark else Color.Black
-                val borderShuffle = if (viewModel.isShuffleEnabled) redBright else Color.DarkGray
+                val bgShuffle = if (viewModel.isShuffleEnabled) redDark else Color.Black 
+                val borderShuffle = if (viewModel.isShuffleEnabled) redBright else Color.DarkGray 
                 Box(modifier = Modifier.size(45.dp).clip(CircleShape).background(bgShuffle).border(1.dp, borderShuffle, CircleShape)
-                    .clickable {
+                    .clickable { 
                         viewModel.toggleShuffle()
                         val msj = if (viewModel.isShuffleEnabled) "Modo aleatorio encendido" else "Modo aleatorio apagado"
                         Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()

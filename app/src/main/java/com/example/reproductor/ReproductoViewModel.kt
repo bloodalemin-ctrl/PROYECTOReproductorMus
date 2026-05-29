@@ -23,7 +23,6 @@ import kotlinx.coroutines.*
 
 data class EstadoTema(val esNokia: Boolean = false)
 
-// MODELO DE DATOS REQUERIDO PARA LA BIBLIOTECA DESLIZABLE (Xiadani)
 data class Cancion(val titulo: String, val artista: String, val uri: Uri?)
 
 class ReproductorViewModel(application: Application) : AndroidViewModel(application) {
@@ -41,14 +40,12 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
     var duration by mutableLongStateOf(0L)
     private var jobProgreso: Job? = null
 
-    // TUS VARIABLES ORIGINALES (Volumen y Control de Modos)
     var currentVolume by mutableFloatStateOf(1f)
     var isShuffleEnabled by mutableStateOf(false)
     var isRepeatOne by mutableStateOf(false)
 
     private val sharedPreferences = application.getSharedPreferences("BibliotecaPrefs", Context.MODE_PRIVATE)
 
-    // LA LISTA REAL DE LA BIBLIOTECA: Sincronizada con Compose y Media3 (Xiadani)
     val listaCanciones = mutableStateListOf<Cancion>()
 
     private val volumeReceiver = object : BroadcastReceiver() {
@@ -84,7 +81,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
             isPlaying = controller.isPlaying
             duration = controller.duration.coerceAtLeast(0L)
             currentPosition = controller.currentPosition
-
+            
             isShuffleEnabled = controller.shuffleModeEnabled
             isRepeatOne = controller.repeatMode == Player.REPEAT_MODE_ONE
 
@@ -123,7 +120,6 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         })
     }
 
-    // TU FLUIDEZ: ¡A 30 MS! (Ale)
     private fun arrancarRelojProgreso(player: Player) {
         detenerRelojProgreso()
         jobProgreso = CoroutineScope(Dispatchers.Main).launch {
@@ -173,7 +169,6 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
                 listaCanciones.add(Cancion(titulo, artista, urlDirecta))
             }
 
-            // Agregamos también las canciones persistentes
             val persistentes = cargarCancionesLocalesPersistentes()
             persistentes.forEach { item ->
                 listaCanciones.add(Cancion(
@@ -287,7 +282,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         val player = exoPlayer ?: return
         if (player.isPlaying) player.pause() else player.play()
     }
-
+    
     fun toggleShuffle() {
         val player = exoPlayer ?: return
         isShuffleEnabled = !isShuffleEnabled
