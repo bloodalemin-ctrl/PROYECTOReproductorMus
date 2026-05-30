@@ -1,6 +1,9 @@
 @file:OptIn(androidx.compose.animation.ExperimentalAnimationApi::class)
 package com.example.reproductor
 
+import android.content.Context
+import android.media.AudioManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -8,6 +11,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,38 +33,33 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private enum class NokiaViewMode { Album, Cassette, Visualizer }
 
 @Composable
-fun SeccionNokia(viewModel: ReproductorViewModel) {
+fun SeccionNokia(
+    viewModel: ReproductorViewModel,
+    onAbrirBiblioteca: () -> Unit
+) {
     val context = LocalContext.current
-
-    // ====================================================================
-    // PARCHE DE SEGURIDAD: Espera a que el servicio se conecte para no crashear
-    // ====================================================================
     val exoPlayer = viewModel.exoPlayer ?: return
-
     val isPlaying = viewModel.isPlaying
 
-    // ====================================================================
-    // SOLUCIÓN AL CONGELAMIENTO: Enlace directo al reloj central del ViewModel
-    // ====================================================================
     val currentPosition = viewModel.currentPosition
     val duration = viewModel.duration
 
     var currentView by remember { mutableStateOf(NokiaViewMode.Album) }
     var mostrarMenu by remember { mutableStateOf(false) }
+    
+    var isDraggingProgreso by remember { mutableStateOf(false) }
+    var progresoLocal by remember { mutableFloatStateOf(0f) }
+    val coroutineScope = rememberCoroutineScope() 
 
-    // ====================================================================
-    // CONEXIÓN PARA CARGAR MÚSICA LOCAL (Igual que en Windows)
-    // ====================================================================
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
         onResult = { uris ->
-            if (uris.isNotEmpty()) {
-                viewModel.agregarCancionesLocales(uris)
-            }
+            if (uris.isNotEmpty()) viewModel.agregarCancionesLocales(uris)
         }
     )
 
@@ -72,18 +73,26 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
-            modifier = Modifier.fillMaxSize().background(blackBackground).padding(horizontal = 16.dp, vertical = 20.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .background(blackBackground)
+                .navigationBarsPadding()
+                .draggable(
+                    orientation = Orientation.Vertical,
+                    state = rememberDraggableState { delta ->
+                        if (delta > 15f) onAbrirBiblioteca()
+                    }
+                )
+                .padding(horizontal = 16.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // BOCINA SUPERIOR
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 repeat(8) { Box(modifier = Modifier.size(width = 6.dp, height = 12.dp).background(Color(0xFF222222), CircleShape)) }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // PANTALLA LCD
             Box(
                 modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(12.dp)).border(4.dp, redXpress, RoundedCornerShape(12.dp))
                     .background(Brush.verticalGradient(listOf(lcdScreen, Color.Black)))
@@ -120,10 +129,24 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
                     Spacer(modifier = Modifier.height(5.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(formatTimeNokia(currentPosition), color = redBright, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        val textoTiempo = if (isDraggingProgreso) (progresoLocal * duration).toLong() else currentPosition
+                        Text(formatTimeNokia(textoTiempo), color = redBright, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        
                         Slider(
-                            value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                            onValueChange = { val newPos = (it * duration).toLong(); exoPlayer.seekTo(newPos) },
+                            value = if (isDraggingProgreso) progresoLocal else if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
+                            onValueChange = { 
+                                isDraggingProgreso = true
+                                progresoLocal = it 
+                            },
+                            onValueChangeFinished = {
+                                val nuevaPosicion = (progresoLocal * duration).toLong()
+                                viewModel.currentPosition = nuevaPosicion 
+                                exoPlayer.seekTo(nuevaPosicion)
+                                coroutineScope.launch {
+                                    delay(200)
+                                    isDraggingProgreso = false
+                                }
+                            },
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(20.dp),
                             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = redBright, inactiveTrackColor = redDark)
                         )
@@ -136,7 +159,6 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
             Text("👆 Toca la pantalla para cambiar animación", color = grayText, fontSize = 11.sp)
             Spacer(modifier = Modifier.height(15.dp))
 
-            // TECLAS DE FUNCIÓN
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Options", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { mostrarMenu = true })
                 Text("NOKIA", color = grayText.copy(alpha = 0.4f), fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
@@ -145,28 +167,48 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // Botones fisicos
             Row(
                 modifier = Modifier.fillMaxWidth().background(Color(0xFF111111), RoundedCornerShape(40.dp)).padding(10.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(modifier = Modifier.size(75.dp, 55.dp).clip(RoundedCornerShape(30.dp)).background(glossyRedButton).border(1.dp, Color(0xFFFF6666).copy(0.5f), RoundedCornerShape(30.dp))
+                val iconRepeat = if (viewModel.isRepeatOne) "🔂" else "🔁"
+                val bgRepeat = if (viewModel.isRepeatOne) redDark else Color.Black 
+                val borderRepeat = if (viewModel.isRepeatOne) redBright else Color.DarkGray 
+                Box(modifier = Modifier.size(45.dp).clip(CircleShape).background(bgRepeat).border(1.dp, borderRepeat, CircleShape)
+                    .clickable { 
+                        viewModel.toggleRepeat()
+                        val msj = if (viewModel.isRepeatOne) "Repetir esta canción" else "Repetición apagada"
+                        Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
+                    },
+                    contentAlignment = Alignment.Center) { Text(iconRepeat, fontSize = 18.sp) }
+
+                Box(modifier = Modifier.size(55.dp, 50.dp).clip(RoundedCornerShape(25.dp)).background(glossyRedButton).border(1.dp, Color(0xFFFF6666).copy(0.5f), RoundedCornerShape(25.dp))
                     .clickable { if (exoPlayer.hasPreviousMediaItem()) exoPlayer.seekToPrevious() else exoPlayer.seekTo(0) },
-                    contentAlignment = Alignment.Center) { Text("⏮", color = Color.White, fontSize = 22.sp) }
+                    contentAlignment = Alignment.Center) { Text("⏮", color = Color.White, fontSize = 18.sp) }
 
-                Box(modifier = Modifier.size(110.dp, 75.dp).shadow(8.dp, RoundedCornerShape(40.dp)).clip(RoundedCornerShape(40.dp)).background(glossyRedButton).border(2.dp, Color(0xFFFF6666).copy(0.4f), RoundedCornerShape(40.dp))
+                Box(modifier = Modifier.size(80.dp, 60.dp).shadow(8.dp, RoundedCornerShape(30.dp)).clip(RoundedCornerShape(30.dp)).background(glossyRedButton).border(2.dp, Color(0xFFFF6666).copy(0.4f), RoundedCornerShape(30.dp))
                     .clickable { viewModel.alternarReproduccion() },
-                    contentAlignment = Alignment.Center) { Text(if (isPlaying) "⏸" else "▶", color = Color.White, fontSize = 36.sp) }
+                    contentAlignment = Alignment.Center) { Text(if (isPlaying) "⏸" else "▶", color = Color.White, fontSize = 30.sp) }
 
-                Box(modifier = Modifier.size(75.dp, 55.dp).clip(RoundedCornerShape(30.dp)).background(glossyRedButton).border(1.dp, Color(0xFFFF6666).copy(0.5f), RoundedCornerShape(30.dp))
+                Box(modifier = Modifier.size(55.dp, 50.dp).clip(RoundedCornerShape(25.dp)).background(glossyRedButton).border(1.dp, Color(0xFFFF6666).copy(0.5f), RoundedCornerShape(25.dp))
                     .clickable { if (exoPlayer.hasNextMediaItem()) exoPlayer.seekToNext() },
-                    contentAlignment = Alignment.Center) { Text("⏭", color = Color.White, fontSize = 22.sp) }
+                    contentAlignment = Alignment.Center) { Text("⏭", color = Color.White, fontSize = 18.sp) }
+                    
+                val iconShuffle = "🔀"
+                val bgShuffle = if (viewModel.isShuffleEnabled) redDark else Color.Black 
+                val borderShuffle = if (viewModel.isShuffleEnabled) redBright else Color.DarkGray 
+                Box(modifier = Modifier.size(45.dp).clip(CircleShape).background(bgShuffle).border(1.dp, borderShuffle, CircleShape)
+                    .clickable { 
+                        viewModel.toggleShuffle()
+                        val msj = if (viewModel.isShuffleEnabled) "Modo aleatorio encendido" else "Modo aleatorio apagado"
+                        Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
+                    },
+                    contentAlignment = Alignment.Center) { Text(iconShuffle, fontSize = 18.sp) }
             }
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // VOLUMEN (Conectado al ViewModel)
             Row(modifier = Modifier.fillMaxWidth().background(Color(0xFF1A1A1A), RoundedCornerShape(20.dp)).padding(horizontal = 15.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("🔈", color = grayText, fontSize = 18.sp)
                 Slider(
@@ -180,7 +222,6 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // BOTÓN DE CARGAR MÚSICA
             Button(
                 onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
                 modifier = Modifier.fillMaxWidth().height(55.dp),
@@ -193,7 +234,6 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            // BOTONES DE CAMBIO DE MODO
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -222,23 +262,41 @@ fun SeccionNokia(viewModel: ReproductorViewModel) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) { repeat(12) { Box(modifier = Modifier.size(width = 6.dp, height = 12.dp).background(Color(0xFF222222), CircleShape)) } }
         }
 
-        // MENÚ ORIGINAL
         if (mostrarMenu) {
             Column(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.95f)).padding(30.dp)) {
                 Text("MENU", color = redBright, fontWeight = FontWeight.Bold, fontSize = 24.sp, fontFamily = FontFamily.Monospace)
                 Spacer(modifier = Modifier.height(20.dp))
-                val opciones = listOf("🎵 Pistas", "❌ Cerrar Menú")
-                opciones.forEach { opcion ->
-                    Text(text = opcion, color = Color.White, modifier = Modifier.fillMaxWidth().clickable { mostrarMenu = false }.padding(vertical = 15.dp), fontSize = 18.sp)
-                    HorizontalDivider(color = Color.DarkGray)
-                }
+
+                Text(
+                    text = "🎵 Pistas",
+                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            mostrarMenu = false
+                            onAbrirBiblioteca()
+                        }
+                        .padding(vertical = 15.dp),
+                    fontSize = 18.sp
+                )
+                HorizontalDivider(color = Color.DarkGray)
+
+                Text(
+                    text = "❌ Cerrar Menú",
+                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { mostrarMenu = false }
+                        .padding(vertical = 15.dp),
+                    fontSize = 18.sp
+                )
+                HorizontalDivider(color = Color.DarkGray)
             }
         }
     }
 }
 
-@Composable
-fun NokiaAlbum() { Box(modifier = Modifier.size(140.dp).background(Color(0xFF111111), RoundedCornerShape(8.dp)).border(2.dp, Color(0xFF660000), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) { Text("💿", fontSize = 70.sp) } }
+@Composable fun NokiaAlbum() { Box(modifier = Modifier.size(140.dp).background(Color(0xFF111111), RoundedCornerShape(8.dp)).border(2.dp, Color(0xFF660000), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) { Text("💿", fontSize = 70.sp) } }
 
 @Composable
 fun NokiaVisualizer(isPlaying: Boolean, color: Color) {
@@ -266,7 +324,5 @@ fun NokiaCassette(isPlaying: Boolean, colorAcento: Color) {
     }
 }
 
-@Composable
-fun NokiaEngranaje(angulo: Float, color: Color) { Box(modifier = Modifier.size(30.dp).graphicsLayer(rotationZ = angulo).background(Color.Black, CircleShape).border(2.dp, color, CircleShape), contentAlignment = Alignment.Center) { Box(Modifier.width(2.dp).height(30.dp).background(color)); Box(Modifier.width(30.dp).height(2.dp).background(color)); Box(Modifier.size(10.dp).background(color, CircleShape)) } }
-
+@Composable fun NokiaEngranaje(angulo: Float, color: Color) { Box(modifier = Modifier.size(30.dp).graphicsLayer(rotationZ = angulo).background(Color.Black, CircleShape).border(2.dp, color, CircleShape), contentAlignment = Alignment.Center) { Box(Modifier.width(2.dp).height(30.dp).background(color)); Box(Modifier.width(30.dp).height(2.dp).background(color)); Box(Modifier.size(10.dp).background(color, CircleShape)) } }
 fun formatTimeNokia(ms: Long): String { if (ms < 0) return "00:00"; val totalSeconds = ms / 1000; return String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60) }
