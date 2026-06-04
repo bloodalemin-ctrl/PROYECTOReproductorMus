@@ -20,28 +20,51 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             ReproductorTheme {
-                // Estado unificado para levantar el BottomSheet en toda la App
+                // Estados unificados para levantar ambos menús en la app
                 var mostrarBiblioteca by remember { mutableStateOf(false) }
-                val estilo = viewModel.temaActual
+                var mostrarSelectorModos by remember { mutableStateOf(false) }
+
+                val estiloActual = viewModel.temaActual.modo
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    if (estilo.esNokia) {
-                        SeccionNokia(
+
+                    // Ruteador central de vistas
+                    when (estiloActual) {
+                        TipoModo.NOKIA -> SeccionNokia(
                             viewModel = viewModel,
-                            onAbrirBiblioteca = { mostrarBiblioteca = true } // Pasa la señal al Nokia
+                            onAbrirBiblioteca = { mostrarBiblioteca = true },
+                            onAbrirModos = { mostrarSelectorModos = true }
                         )
-                    } else {
-                        WmpThemeScreen(
+                        TipoModo.WINDOWS -> WmpThemeScreen(
                             viewModel = viewModel,
-                            onAbrirBiblioteca = { mostrarBiblioteca = true } // Pasa la señal al Windows
+                            onAbrirBiblioteca = { mostrarBiblioteca = true },
+                            onAbrirModos = { mostrarSelectorModos = true }
+                        )
+                        TipoModo.CLASSIC_POD -> ClassicPodScreen(
+                            viewModel = viewModel,
+                            onAbrirBiblioteca = { mostrarBiblioteca = true },
+                            onAbrirModos = { mostrarSelectorModos = true }
+                        )
+                        TipoModo.GAMMING -> GammingModoScreen(
+                            viewModel = viewModel,
+                            onAbrirBiblioteca = { mostrarBiblioteca = true },
+                            onAbrirModos = { mostrarSelectorModos = true }
                         )
                     }
 
-                    // Hoja deslizable global superpuesta
+                    // Menú Desplegable 1: La Biblioteca Musical
                     if (mostrarBiblioteca) {
                         BibliotecaBottomSheet(
                             viewModel = viewModel,
                             onDismissRequest = { mostrarBiblioteca = false }
+                        )
+                    }
+
+                    // Menú Desplegable 2: El Selector de Diseños (Modos)
+                    if (mostrarSelectorModos) {
+                        SelectorModoBottomSheet(
+                            viewModel = viewModel,
+                            onDismissRequest = { mostrarSelectorModos = false }
                         )
                     }
                 }

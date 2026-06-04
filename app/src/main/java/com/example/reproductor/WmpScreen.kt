@@ -44,7 +44,8 @@ private enum class WmpViewMode { DiscoOnly, CassetteOnly, VisualizerOnly }
 @Composable
 fun WmpThemeScreen(
     viewModel: ReproductorViewModel,
-    onAbrirBiblioteca: () -> Unit
+    onAbrirBiblioteca: () -> Unit,
+    onAbrirModos: () -> Unit // NUEVO: Señal para abrir el menú de modos
 ) {
     val context = LocalContext.current
     val exoPlayer = viewModel.exoPlayer ?: return
@@ -52,7 +53,7 @@ fun WmpThemeScreen(
 
     val currentPosition = viewModel.currentPosition
     val duration = viewModel.duration
-    
+
     var isDraggingProgreso by remember { mutableStateOf(false) }
     var progresoLocal by remember { mutableFloatStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
@@ -66,13 +67,13 @@ fun WmpThemeScreen(
         }
     )
 
-    val wmpNostalgiaBlue = Color(0xFF3864A6) 
-    val wmpElectricBlue = Color(0xFF4FC3F7)  
-    val metallicSilver = Color(0xFFB0bec5)   
-    val metallicLight = Color(0xFFeceff1)    
-    val metallicDark = Color(0xFF78909c)     
-    val wmpScreenBg = Color(0xFF000511)      
-    val wmpScreenBorder = Color(0xFF5D7BAA) 
+    val wmpNostalgiaBlue = Color(0xFF3864A6)
+    val wmpElectricBlue = Color(0xFF4FC3F7)
+    val metallicSilver = Color(0xFFB0bec5)
+    val metallicLight = Color(0xFFeceff1)
+    val metallicDark = Color(0xFF78909c)
+    val wmpScreenBg = Color(0xFF000511)
+    val wmpScreenBorder = Color(0xFF5D7BAA)
 
     val chasisGradient = Brush.verticalGradient(
         colors = listOf(metallicLight, metallicSilver, metallicDark)
@@ -81,18 +82,18 @@ fun WmpThemeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF263238)) 
-            .navigationBarsPadding() 
+            .background(Color(0xFF263238))
+            .navigationBarsPadding()
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Bottom 
+        verticalArrangement = Arrangement.Bottom
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .shadow(15.dp, RoundedCornerShape(20.dp)) 
-                .border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(20.dp)) 
+                .shadow(15.dp, RoundedCornerShape(20.dp))
+                .border(2.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
                 .background(chasisGradient, RoundedCornerShape(20.dp))
                 .draggable(
                     orientation = Orientation.Vertical,
@@ -100,7 +101,7 @@ fun WmpThemeScreen(
                         if (delta > 15f) onAbrirBiblioteca()
                     }
                 )
-                .padding(12.dp), 
+                .padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -113,7 +114,7 @@ fun WmpThemeScreen(
                     .fillMaxWidth()
                     .height(210.dp)
                     .clip(RoundedCornerShape(10.dp))
-                    .border(3.dp, wmpScreenBorder, RoundedCornerShape(10.dp)) 
+                    .border(3.dp, wmpScreenBorder, RoundedCornerShape(10.dp))
                     .background(wmpScreenBg)
                     .clickable {
                         currentWmpView = when (currentWmpView) {
@@ -150,7 +151,7 @@ fun WmpThemeScreen(
                     .fillMaxWidth()
                     .height(35.dp)
                     .clip(RoundedCornerShape(5.dp))
-                    .border(1.dp, metallicDark, RoundedCornerShape(5.dp)) 
+                    .border(1.dp, metallicDark, RoundedCornerShape(5.dp))
                     .background(Color.Black.copy(0.2f))
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center
@@ -176,16 +177,16 @@ fun WmpThemeScreen(
             ) {
                 val textoTiempo = if (isDraggingProgreso) (progresoLocal * duration).toLong() else currentPosition
                 Text(formatTimeRetroWmp(textoTiempo), color = Color(0xFF1A237E), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                
+
                 Slider(
                     value = if (isDraggingProgreso) progresoLocal else if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                    onValueChange = { 
+                    onValueChange = {
                         isDraggingProgreso = true
-                        progresoLocal = it 
+                        progresoLocal = it
                     },
                     onValueChangeFinished = {
                         val nuevaPosicion = (progresoLocal * duration).toLong()
-                        viewModel.currentPosition = nuevaPosicion 
+                        viewModel.currentPosition = nuevaPosicion
                         exoPlayer.seekTo(nuevaPosicion)
                         coroutineScope.launch {
                             delay(200)
@@ -208,13 +209,13 @@ fun WmpThemeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val iconRepeat = if (viewModel.isRepeatOne) "🔂" else "🔁"
-                val bgRepeat = if (viewModel.isRepeatOne) wmpNostalgiaBlue else metallicSilver 
+                val bgRepeat = if (viewModel.isRepeatOne) wmpNostalgiaBlue else metallicSilver
                 RetroWmpControlButton(iconRepeat, bgRepeat, Color.White, 40.dp, 16.sp) {
                     viewModel.toggleRepeat()
                     val msj = if (viewModel.isRepeatOne) "Repetir esta canción" else "Repetición apagada"
                     Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
                 }
-                
+
                 Spacer(Modifier.width(10.dp))
 
                 RetroWmpControlButton("⏮", metallicSilver, wmpNostalgiaBlue, 45.dp, 16.sp) {
@@ -248,10 +249,10 @@ fun WmpThemeScreen(
                 RetroWmpControlButton("⏭", metallicSilver, wmpNostalgiaBlue, 45.dp, 16.sp) {
                     if (exoPlayer.hasNextMediaItem()) exoPlayer.seekToNext()
                 }
-                
+
                 Spacer(Modifier.width(10.dp))
-                
-                val bgShuffle = if (viewModel.isShuffleEnabled) wmpNostalgiaBlue else metallicSilver 
+
+                val bgShuffle = if (viewModel.isShuffleEnabled) wmpNostalgiaBlue else metallicSilver
                 RetroWmpControlButton("🔀", bgShuffle, Color.White, 40.dp, 16.sp) {
                     viewModel.toggleShuffle()
                     val msj = if (viewModel.isShuffleEnabled) "Modo aleatorio encendido" else "Modo aleatorio apagado"
@@ -292,31 +293,20 @@ fun WmpThemeScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // EL NUEVO BOTÓN ÚNICO PARA CAMBIAR EL MODO
+            Button(
+                onClick = onAbrirModos,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 5.dp)
+                    .height(45.dp)
+                    .shadow(4.dp, RoundedCornerShape(20.dp)),
+                colors = ButtonDefaults.buttonColors(containerColor = wmpNostalgiaBlue),
+                border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(0.5f)),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(0.dp)
             ) {
-                Button(
-                    onClick = { viewModel.cambiarTema() },
-                    modifier = Modifier.weight(1f).height(45.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    border = androidx.compose.foundation.BorderStroke(2.dp, metallicDark),
-                    shape = RoundedCornerShape(20.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text("MODO NOKIA", color = Color(0xFF1A237E), fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
-                }
-
-                Button(
-                    onClick = { },
-                    modifier = Modifier.weight(1f).height(45.dp).shadow(4.dp, RoundedCornerShape(20.dp)),
-                    colors = ButtonDefaults.buttonColors(containerColor = wmpNostalgiaBlue),
-                    border = androidx.compose.foundation.BorderStroke(2.dp, Color.White.copy(0.5f)),
-                    shape = RoundedCornerShape(20.dp),
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Text("MODO WINDOWS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1)
-                }
+                Text("🎨 CAMBIAR MODO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1)
             }
         }
     }
@@ -331,7 +321,7 @@ fun DiscoRetroWmp(isPlaying: Boolean) {
 
     Box(
         modifier = Modifier.size(150.dp).graphicsLayer(rotationZ = angulo).shadow(6.dp, CircleShape).background(
-                Brush.linearGradient(colors = listOf(Color(0xFFCFD8DC), Color(0xFF90A4AE), Color(0xFFECEFF1), Color(0xFF78909C), Color(0xFFCFD8DC), Color(0xFFECEFF1))), CircleShape).border(1.dp, Color.White.copy(0.6f), CircleShape),
+            Brush.linearGradient(colors = listOf(Color(0xFFCFD8DC), Color(0xFF90A4AE), Color(0xFFECEFF1), Color(0xFF78909C), Color(0xFFCFD8DC), Color(0xFFECEFF1))), CircleShape).border(1.dp, Color.White.copy(0.6f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Box(modifier = Modifier.size(138.dp).background(Brush.radialGradient(colors = listOf(Color.Transparent, Color(0xFFB2DFDB).copy(alpha = 0.2f), Color(0xFFE1BEE7).copy(alpha = 0.2f), Color(0xFFB3E5FC).copy(alpha = 0.2f), Color.Transparent)), CircleShape).border(0.5.dp, Color.Black.copy(0.15f), CircleShape), contentAlignment = Alignment.Center) {

@@ -21,7 +21,17 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.*
 
-data class EstadoTema(val esNokia: Boolean = false)
+// ====================================================================
+// LISTA DE MODOS DISPONIBLES
+// ====================================================================
+enum class TipoModo(val titulo: String, val icono: String) {
+    NOKIA("Nokia XpressMusic", "📱"),
+    WINDOWS("Windows Media Player", "💽"),
+    CLASSIC_POD("Classic Pod (Próximamente)", "🎧"),
+    GAMMING("GammingModo (Próximamente)", "🕹️")
+}
+
+data class EstadoTema(val modo: TipoModo = TipoModo.NOKIA)
 
 data class Cancion(val titulo: String, val artista: String, val uri: Uri?)
 
@@ -81,7 +91,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
             isPlaying = controller.isPlaying
             duration = controller.duration.coerceAtLeast(0L)
             currentPosition = controller.currentPosition
-            
+
             isShuffleEnabled = controller.shuffleModeEnabled
             isRepeatOne = controller.repeatMode == Player.REPEAT_MODE_ONE
 
@@ -282,7 +292,7 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         val player = exoPlayer ?: return
         if (player.isPlaying) player.pause() else player.play()
     }
-    
+
     fun toggleShuffle() {
         val player = exoPlayer ?: return
         isShuffleEnabled = !isShuffleEnabled
@@ -304,8 +314,9 @@ class ReproductorViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
-    fun cambiarTema() {
-        temaActual = EstadoTema(esNokia = !temaActual.esNokia)
+    // NUEVA FUNCIÓN QUE REEMPLAZA A LA ANTERIOR
+    fun cambiarModo(nuevoModo: TipoModo) {
+        temaActual = EstadoTema(modo = nuevoModo)
     }
 
     override fun onCleared() {

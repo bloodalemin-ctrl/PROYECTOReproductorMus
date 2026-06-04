@@ -40,7 +40,8 @@ private enum class NokiaViewMode { Album, Cassette, Visualizer }
 @Composable
 fun SeccionNokia(
     viewModel: ReproductorViewModel,
-    onAbrirBiblioteca: () -> Unit
+    onAbrirBiblioteca: () -> Unit,
+    onAbrirModos: () -> Unit // NUEVO: Señal para abrir el menú de modos
 ) {
     val context = LocalContext.current
     val exoPlayer = viewModel.exoPlayer ?: return
@@ -51,10 +52,10 @@ fun SeccionNokia(
 
     var currentView by remember { mutableStateOf(NokiaViewMode.Album) }
     var mostrarMenu by remember { mutableStateOf(false) }
-    
+
     var isDraggingProgreso by remember { mutableStateOf(false) }
     var progresoLocal by remember { mutableFloatStateOf(0f) }
-    val coroutineScope = rememberCoroutineScope() 
+    val coroutineScope = rememberCoroutineScope()
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments(),
@@ -131,16 +132,16 @@ fun SeccionNokia(
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         val textoTiempo = if (isDraggingProgreso) (progresoLocal * duration).toLong() else currentPosition
                         Text(formatTimeNokia(textoTiempo), color = redBright, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                        
+
                         Slider(
                             value = if (isDraggingProgreso) progresoLocal else if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                            onValueChange = { 
+                            onValueChange = {
                                 isDraggingProgreso = true
-                                progresoLocal = it 
+                                progresoLocal = it
                             },
                             onValueChangeFinished = {
                                 val nuevaPosicion = (progresoLocal * duration).toLong()
-                                viewModel.currentPosition = nuevaPosicion 
+                                viewModel.currentPosition = nuevaPosicion
                                 exoPlayer.seekTo(nuevaPosicion)
                                 coroutineScope.launch {
                                     delay(200)
@@ -173,10 +174,10 @@ fun SeccionNokia(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val iconRepeat = if (viewModel.isRepeatOne) "🔂" else "🔁"
-                val bgRepeat = if (viewModel.isRepeatOne) redDark else Color.Black 
-                val borderRepeat = if (viewModel.isRepeatOne) redBright else Color.DarkGray 
+                val bgRepeat = if (viewModel.isRepeatOne) redDark else Color.Black
+                val borderRepeat = if (viewModel.isRepeatOne) redBright else Color.DarkGray
                 Box(modifier = Modifier.size(45.dp).clip(CircleShape).background(bgRepeat).border(1.dp, borderRepeat, CircleShape)
-                    .clickable { 
+                    .clickable {
                         viewModel.toggleRepeat()
                         val msj = if (viewModel.isRepeatOne) "Repetir esta canción" else "Repetición apagada"
                         Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
@@ -194,12 +195,12 @@ fun SeccionNokia(
                 Box(modifier = Modifier.size(55.dp, 50.dp).clip(RoundedCornerShape(25.dp)).background(glossyRedButton).border(1.dp, Color(0xFFFF6666).copy(0.5f), RoundedCornerShape(25.dp))
                     .clickable { if (exoPlayer.hasNextMediaItem()) exoPlayer.seekToNext() },
                     contentAlignment = Alignment.Center) { Text("⏭", color = Color.White, fontSize = 18.sp) }
-                    
+
                 val iconShuffle = "🔀"
-                val bgShuffle = if (viewModel.isShuffleEnabled) redDark else Color.Black 
-                val borderShuffle = if (viewModel.isShuffleEnabled) redBright else Color.DarkGray 
+                val bgShuffle = if (viewModel.isShuffleEnabled) redDark else Color.Black
+                val borderShuffle = if (viewModel.isShuffleEnabled) redBright else Color.DarkGray
                 Box(modifier = Modifier.size(45.dp).clip(CircleShape).background(bgShuffle).border(1.dp, borderShuffle, CircleShape)
-                    .clickable { 
+                    .clickable {
                         viewModel.toggleShuffle()
                         val msj = if (viewModel.isShuffleEnabled) "Modo aleatorio encendido" else "Modo aleatorio apagado"
                         Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
@@ -234,28 +235,14 @@ fun SeccionNokia(
 
             Spacer(modifier = Modifier.height(15.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            // EL NUEVO BOTÓN ÚNICO PARA CAMBIAR EL MODO
+            Button(
+                onClick = onAbrirModos,
+                modifier = Modifier.fillMaxWidth().height(55.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF222222)),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Button(
-                    onClick = { },
-                    modifier = Modifier.weight(1f).height(55.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = redXpress),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("MODO NOKIA", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-
-                Button(
-                    onClick = { viewModel.cambiarTema() },
-                    modifier = Modifier.weight(1f).height(55.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                    border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF222222)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("MODO WINDOWS", color = grayText, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
+                Text("🎨 CAMBIAR MODO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
 
             Spacer(modifier = Modifier.height(10.dp))
