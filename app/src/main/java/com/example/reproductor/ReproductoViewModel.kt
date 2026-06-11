@@ -22,13 +22,13 @@ import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.*
 
 // ====================================================================
-// LISTA DE MODOS DISPONIBLES
+// MODOS DISPONIBLES
 // ====================================================================
 enum class TipoModo(val titulo: String, val icono: String) {
     NOKIA("Nokia XpressMusic", "📱"),
     WINDOWS("Windows Media Player", "💽"),
-    CLASSIC_POD("Classic Pod (Próximamente)", "🎧"),
-    GAMMING("GammingModo (Próximamente)", "🕹️")
+    CLASSIC_POD("Classic Pod", "🎧"),
+    GAMMING("GammingModo", "🕹️")
 }
 
 data class EstadoTema(val modo: TipoModo = TipoModo.NOKIA)

@@ -1,20 +1,19 @@
 @file:OptIn(
     androidx.media3.common.util.UnstableApi::class,
     androidx.compose.animation.ExperimentalAnimationApi::class,
-    androidx.compose.foundation.ExperimentalFoundationApi::class
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+    androidx.compose.material3.ExperimentalMaterial3Api::class
 )
 package com.example.reproductor
 
 import android.content.Context
 import android.media.AudioManager
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -22,6 +21,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,22 +29,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.geometry.*
+import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.*
+import androidx.compose.ui.text.font.FontStyle
 
-private enum class CoquetteViewMode { Disco, Cassette, Visualizer }
+private enum class CoquetteViewMode { Visualizer, Disco, Cassette }
+
+// Forma de corazón para los botones
+val HeartShape = GenericShape { size, _ ->
+    val width = size.width
+    val height = size.height
+    moveTo(width / 2f, height * 0.25f)
+    cubicTo(width * 0.1f, -height * 0.15f, -width * 0.15f, height * 0.4f, width / 2f, height * 0.9f)
+    cubicTo(width * 1.15f, height * 0.4f, width * 0.9f, -height * 0.15f, width / 2f, height * 0.25f)
+    close()
+}
 
 @Composable
 fun ClassicPodScreen(
@@ -55,500 +65,518 @@ fun ClassicPodScreen(
     val context = LocalContext.current
     val exoPlayer = viewModel.exoPlayer ?: return
     val isPlaying = viewModel.isPlaying
-
     val currentPosition = viewModel.currentPosition
     val duration = viewModel.duration
 
     var isDraggingProgreso by remember { mutableStateOf(false) }
     var progresoLocal by remember { mutableFloatStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
-
-    var currentView by remember { mutableStateOf(CoquetteViewMode.Disco) }
+    var currentView by remember { mutableStateOf(CoquetteViewMode.Visualizer) }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments(),
-        onResult = { uris ->
-            if (uris.isNotEmpty()) viewModel.agregarCancionesLocales(uris)
-        }
-    )
+    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) viewModel.agregarCancionesLocales(uris)
+    }
 
-    // Paleta de Colores Coquette
-    val rosaPastelFondo = Color(0xFFFFC0CB)
-    val rosaChicleMedio = Color(0xFFFF85A2)
-    val rosaFucsiaChasis = Color(0xFFF50057)
-    val rosaOscuroBorde = Color(0xFFC2185B)
-    val blancoClickWheel = Color(0xFFF9F9F9)
+    // ====================================================================
+    // FONDO: ROSA PASTEL A ROSA MEDIO
+    // ====================================================================
+    val rosaFondoTop = Color(0xFFFFD1DC)
+    val rosaFondoBottom = Color(0xFFFF85A2)
+
+    val rosaFuerte = Color(0xFFE91E63)
+    val blancoClickWheel = Color(0xFFFDFDFD)
     val grisIconosWheel = Color(0xFF8E8E93)
-    val wmpScreenBg = Color(0xFF0D0206)
-
-    val gradientePantallaGeneral = Brush.verticalGradient(
-        colors = listOf(Color(0xFFFFF0F5), rosaPastelFondo)
-    )
-
-    val chasisGradient = Brush.verticalGradient(
-        colors = listOf(Color(0xFFFF94B9), rosaChicleMedio, rosaFucsiaChasis)
-    )
+    val textShadow = Shadow(color = Color.Black.copy(alpha = 0.35f), offset = Offset(2f, 2f), blurRadius = 6f)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(gradientePantallaGeneral)
-            .navigationBarsPadding()
-            .padding(16.dp),
-        contentAlignment = Alignment.BottomCenter
+            .background(Brush.verticalGradient(listOf(rosaFondoTop, rosaFondoBottom)))
+            .draggable(
+                state = rememberDraggableState { if (it > 15f) onAbrirBiblioteca() },
+                orientation = Orientation.Vertical
+            ),
+        contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .wrapContentHeight()
-                .shadow(25.dp, RoundedCornerShape(24.dp))
-                .border(2.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(24.dp))
-                .background(chasisGradient, RoundedCornerShape(24.dp))
-                .draggable(
-                    orientation = Orientation.Vertical,
-                    state = rememberDraggableState { delta ->
-                        if (delta > 15f) onAbrirBiblioteca()
-                    }
-                )
-                .padding(16.dp),
+                .fillMaxSize()
+                .systemBarsPadding()
+                .padding(horizontal = 24.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // CABECERA ESTILO IPOD
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, bottom = 10.dp, top = 0.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("iPod Nano", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.SansSerif)
-                Text("🌸", fontSize = 12.sp)
+            // HEADER
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(" iPod Coquette", color = rosaFuerte, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                Text("🌸", fontSize = 15.sp)
             }
 
-            // PANTALLA LCD INDEPENDIENTE FIJA
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(210.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .border(2.5.dp, rosaOscuroBorde.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    .background(wmpScreenBg)
-                    .clickable {
-                        currentView = when (currentView) {
-                            CoquetteViewMode.Disco -> CoquetteViewMode.Cassette
-                            CoquetteViewMode.Cassette -> CoquetteViewMode.Visualizer
-                            CoquetteViewMode.Visualizer -> CoquetteViewMode.Disco
-                        }
-                    }
-                    .padding(10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                AnimatedContent(
-                    targetState = currentView,
-                    transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
-                    label = "CoquetteAnimationSwitch"
-                ) { targetMode ->
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        when (targetMode) {
-                            CoquetteViewMode.Disco -> DiscoCoquette(isPlaying)
-                            CoquetteViewMode.Cassette -> CassetteCoquette(isPlaying, rosaPastelFondo)
-                            CoquetteViewMode.Visualizer -> VisualizerOndasCoquette(isPlaying, rosaChicleMedio)
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-            Text("👆 Toca la pantalla para cambiar animación", color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // TITULO DE LA CANCIÓN (Marquee)
+            // ====================================================================
+            // PANTALLA LCD
+            // ====================================================================
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(35.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(0.25f))
-                    .padding(horizontal = 8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val textoBase = "${viewModel.currentTitle} - ${viewModel.currentArtist}"
-                val textoInfinito = "$textoBase          •          ".repeat(10)
-                Text(
-                    text = textoInfinito,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    fontFamily = FontFamily.SansSerif,
-                    modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE, velocity = 30.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // BARRA DE TIEMPO / PROGRESO
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val textoTiempo = if (isDraggingProgreso) (progresoLocal * duration).toLong() else currentPosition
-                Text(formatTimeCoquette(textoTiempo), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-
-                Slider(
-                    value = if (isDraggingProgreso) progresoLocal else if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
-                    onValueChange = {
-                        isDraggingProgreso = true
-                        progresoLocal = it
-                    },
-                    onValueChangeFinished = {
-                        val nuevaPosicion = (progresoLocal * duration).toLong()
-                        viewModel.currentPosition = nuevaPosicion
-                        exoPlayer.seekTo(nuevaPosicion)
-                        coroutineScope.launch {
-                            delay(200)
-                            isDraggingProgreso = false
+                    .height(200.dp) // <--- Valor ajustado para ser un poquito más pequeño
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Color(0xFF0A0205))
+                    .border(1.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
+                    .clickable {
+                        currentView = when (currentView) {
+                            CoquetteViewMode.Visualizer -> CoquetteViewMode.Disco
+                            CoquetteViewMode.Disco -> CoquetteViewMode.Cassette
+                            CoquetteViewMode.Cassette -> CoquetteViewMode.Visualizer
                         }
                     },
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(0.35f)
-                    )
-                )
-                Text(formatTimeCoquette(duration), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                contentAlignment = Alignment.Center
+            ) {
+                AnimatedContent(targetState = currentView, label = "LCDSwitch") { mode ->
+                    when (mode) {
+                        CoquetteViewMode.Visualizer -> NeonWaveformVisualizer(isPlaying)
+                        CoquetteViewMode.Disco -> FloatingHeartsCoquette(isPlaying) // <--- LLUVIA DE CORAZONES
+                        CoquetteViewMode.Cassette -> CassetteCoquette(isPlaying, Color(0xFFFFB6C1))
+                    }
+                }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.weight(0.3f))
 
-            // ====================================================================
-            // SECCIÓN CENTRAL INTERACTIVA (BOTONES ARRIBA + CLICK WHEEL)
-            // ====================================================================
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
+            // INFO TRACK AESTHETIC
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(65.dp)
+                    .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(50))
+                    .border(1.5.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(50))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Botón Izquierdo Superior: Repetir
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = viewModel.currentTitle,
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 20.sp,
+                        maxLines = 1,
+                        fontFamily = FontFamily.Serif,
+                        style = TextStyle(shadow = textShadow)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = viewModel.currentArtist,
+                        color = Color.White.copy(alpha = 0.95f),
+                        fontWeight = FontWeight.SemiBold,
+                        fontStyle = FontStyle.Italic,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        fontFamily = FontFamily.Serif,
+                        style = TextStyle(shadow = textShadow)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(0.2f))
+
+            // PROGRESS BAR MINIMALISTA
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(formatTimeCoquette(currentPosition), color = rosaFuerte, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Slider(
+                    value = if (isDraggingProgreso) progresoLocal else if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
+                    onValueChange = { isDraggingProgreso = true; progresoLocal = it },
+                    onValueChangeFinished = {
+                        exoPlayer.seekTo((progresoLocal * duration).toLong())
+                        coroutineScope.launch { delay(200); isDraggingProgreso = false }
+                    },
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    thumb = { Box(contentAlignment = Alignment.Center) { Text("💖", fontSize = 14.sp) } },
+                    colors = SliderDefaults.colors(activeTrackColor = rosaFuerte.copy(0.6f), inactiveTrackColor = Color.White.copy(0.5f))
+                )
+                Text(formatTimeCoquette(duration), color = rosaFuerte, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.weight(0.2f))
+
+            // CONTROLES CENTRALES
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+
+                // BOTÓN ALEATORIO
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (viewModel.isRepeatOne) Color.White.copy(0.3f) else Color.Black.copy(0.15f))
-                        .clickable {
-                            viewModel.toggleRepeat()
-                            val msj = if (viewModel.isRepeatOne) "Repetir esta canción" else "Repetición desactivada"
-                            Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
-                        },
+                        .size(50.dp)
+                        .clip(HeartShape)
+                        .background(if (viewModel.isShuffleEnabled) Color.White.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.3f))
+                        .clickable { viewModel.toggleShuffle() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(if (viewModel.isRepeatOne) "🔂" else "🔁", fontSize = 16.sp)
+                    ExactShuffleIcon(isActive = viewModel.isShuffleEnabled, modifier = Modifier.size(22.dp))
                 }
 
-                // LA CLICK WHEEL
+                // CLICK WHEEL
                 Box(
                     modifier = Modifier
                         .size(160.dp)
-                        .shadow(12.dp, CircleShape)
-                        .background(blancoClickWheel, CircleShape)
-                        .border(1.dp, Color.Black.copy(alpha = 0.03f), CircleShape),
+                        .shadow(8.dp, CircleShape)
+                        .background(blancoClickWheel, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    // VOLUMEN +
-                    IpodWmpWheelButton(
-                        text = "＋",
-                        modifier = Modifier.align(Alignment.TopCenter).padding(top = 6.dp),
-                        color = grisIconosWheel
-                    ) {
-                        try {
-                            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
-                            viewModel.cambiarVolumen(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat())
-                        } catch (_: SecurityException) {}
+                    IpodWmpWheelButton("＋", Modifier.align(Alignment.TopCenter).padding(top = 10.dp), grisIconosWheel) {
+                        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
                     }
-
-                    // VOLUMEN -
-                    IpodWmpWheelButton(
-                        text = "－",
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
-                        color = grisIconosWheel
-                    ) {
-                        try {
-                            audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
-                            viewModel.cambiarVolumen(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat())
-                        } catch (_: SecurityException) {}
+                    IpodWmpWheelButton("－", Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), grisIconosWheel) {
+                        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
                     }
-
-                    // RETROCEDER (⏮)
-                    IpodWmpWheelButton(
-                        text = "⏮",
-                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp),
-                        color = grisIconosWheel
-                    ) {
+                    IpodWmpWheelButton("⏮", Modifier.align(Alignment.CenterStart).padding(start = 14.dp), grisIconosWheel) {
                         if (exoPlayer.hasPreviousMediaItem()) exoPlayer.seekToPrevious() else exoPlayer.seekTo(0)
                     }
-
-                    // AVANZAR (⏭)
-                    IpodWmpWheelButton(
-                        text = "⏭",
-                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp),
-                        color = grisIconosWheel
-                    ) {
+                    IpodWmpWheelButton("⏭", Modifier.align(Alignment.CenterEnd).padding(end = 14.dp), grisIconosWheel) {
                         if (exoPlayer.hasNextMediaItem()) exoPlayer.seekToNext()
                     }
-
-                    // BOTÓN CENTRAL DE REPRODUCCIÓN
                     Box(
                         modifier = Modifier
-                            .size(58.dp)
-                            .shadow(3.dp, CircleShape)
-                            .background(Brush.verticalGradient(listOf(rosaChicleMedio, rosaFucsiaChasis)), CircleShape)
-                            .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape)
+                            .size(60.dp)
+                            .shadow(2.dp, CircleShape)
+                            .background(Brush.radialGradient(listOf(Color(0xFFFF4081), rosaFuerte)), CircleShape)
                             .clickable { viewModel.alternarReproduccion() },
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(if (isPlaying) "⏸" else "▶", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(if (isPlaying) "⏸" else "▶", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
-                // Botón Derecho Superior: Aleatorio (Shuffle)
+                // BOTÓN REPETIR
                 Box(
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (viewModel.isShuffleEnabled) Color.White.copy(0.3f) else Color.Black.copy(0.15f))
-                        .clickable {
-                            viewModel.toggleShuffle()
-                            val msj = if (viewModel.isShuffleEnabled) "Modo aleatorio encendido" else "Modo aleatorio apagado"
-                            Toast.makeText(context, msj, Toast.LENGTH_SHORT).show()
-                        },
+                        .size(50.dp)
+                        .clip(HeartShape)
+                        .background(if (viewModel.isRepeatOne) Color.White.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.3f))
+                        .clickable { viewModel.toggleRepeat() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("🔀", fontSize = 16.sp, modifier = Modifier.graphicsLayer(alpha = if (viewModel.isShuffleEnabled) 1f else 0.6f))
+                    ExactRepeatIcon(isActive = viewModel.isRepeatOne, modifier = Modifier.size(22.dp))
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.weight(0.5f))
 
-            // SLIDER DE VOLUMEN CON ICONOS CANVAS DEGRADADOS
+            // VOLUMEN
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                AestheticSpeakerIcon(isHighVolume = false, modifier = Modifier.padding(end = 8.dp))
+                VolumeSpeakerIcon(isHigh = false, modifier = Modifier.padding(end = 8.dp))
 
-                Slider(
-                    value = viewModel.currentVolume,
-                    onValueChange = { viewModel.cambiarVolumen(it) },
-                    modifier = Modifier.weight(1f),
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(0.3f)
+                Box(modifier = Modifier.weight(1f).height(30.dp), contentAlignment = Alignment.Center) {
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        val totalHearts = 8
+                        val volumeLevel = (viewModel.currentVolume * totalHearts).toInt()
+                        repeat(totalHearts) { i ->
+                            val isActive = i < volumeLevel
+                            Text("❤", color = if (isActive) Color(0xFFF30000) else Color(0xFFF30000).copy(alpha = 0.2f), fontSize = 18.sp)
+                        }
+                    }
+                    Slider(
+                        value = viewModel.currentVolume, onValueChange = { viewModel.cambiarVolumen(it) },
+                        colors = SliderDefaults.colors(thumbColor = Color.Transparent, activeTrackColor = Color.Transparent, inactiveTrackColor = Color.Transparent)
                     )
-                )
+                }
 
-                AestheticSpeakerIcon(isHighVolume = true, modifier = Modifier.padding(start = 8.dp))
+                VolumeSpeakerIcon(isHigh = true, modifier = Modifier.padding(start = 8.dp))
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.weight(0.5f))
 
-            // BOTÓN CARGAR MÚSICA
-            Button(
-                onClick = { filePickerLauncher.launch(arrayOf("audio/*")) },
-                modifier = Modifier.fillMaxWidth().height(40.dp).shadow(2.dp, RoundedCornerShape(10.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.25f)),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Text("📁 CARGAR MÚSICA DEL DISPOSITIVO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // BOTÓN CAMBIAR MODO
-            Button(
-                onClick = onAbrirModos,
+            // BOTONES INFERIORES SÓLIDOS
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(45.dp)
-                    .shadow(4.dp, RoundedCornerShape(22.dp)),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, rosaChicleMedio),
-                shape = RoundedCornerShape(22.dp),
-                contentPadding = PaddingValues(0.dp)
+                    .height(55.dp)
+                    .shadow(4.dp, RoundedCornerShape(30.dp))
+                    .background(rosaFuerte, RoundedCornerShape(30.dp))
+                    .clickable { filePickerLauncher.launch(arrayOf("audio/*")) },
+                contentAlignment = Alignment.Center
             ) {
-                Text("🎨 CAMBIAR MODO", color = rosaFucsiaChasis, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp, maxLines = 1)
+                Text("📁 CARGAR MÚSICA DEL DISPOSITIVO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(55.dp)
+                    .shadow(4.dp, RoundedCornerShape(30.dp))
+                    .background(rosaFuerte, RoundedCornerShape(30.dp))
+                    .clickable { onAbrirModos() },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🎨 CAMBIAR MODO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
     }
 }
 
 // ====================================================================
-// ICONO DE BOCINA DIBUJADO CON CANVAS VECTORIAL DEGRADADO
+// ECUALIZADOR
 // ====================================================================
 @Composable
-fun AestheticSpeakerIcon(isHighVolume: Boolean, modifier: Modifier = Modifier) {
-    val aestheticGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF8A2BE2), Color(0xFFFF00FF), Color(0xFFFF7F50))
+fun NeonWaveformVisualizer(isPlaying: Boolean) {
+    val totalLineas = 21
+    val infiniteTransition = rememberInfiniteTransition(label = "onda_luz")
+    val phase by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 2f * PI.toFloat(),
+        animationSpec = infiniteRepeatable(tween(1500, easing = LinearEasing), RepeatMode.Restart), label = "anim_phase"
     )
-    Canvas(modifier = modifier.size(22.dp)) {
-        val speakerPath = Path().apply {
-            moveTo(size.width * 0.1f, size.height * 0.35f)
-            lineTo(size.width * 0.3f, size.height * 0.35f)
-            lineTo(size.width * 0.55f, size.height * 0.1f)
-            lineTo(size.width * 0.55f, size.height * 0.9f)
-            lineTo(size.width * 0.3f, size.height * 0.65f)
-            lineTo(size.width * 0.1f, size.height * 0.65f)
+
+    Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 20.dp)) {
+        val spacing = size.width / (totalLineas - 1)
+        val centerY = size.height / 2
+
+        for (index in 0 until totalLineas) {
+            val distanceFromCenter = abs(index - (totalLineas / 2))
+            val maxFactor = max(0f, 1f - (distanceFromCenter * 0.1f)) // Ajustado para verse más amplio
+
+            val factorAltura = if (isPlaying) {
+                0.3f + (sin(phase + index * 0.6f) * 0.4f)
+            } else {
+                0.05f
+            }
+
+            val pX = index * spacing
+            val finalHeight = size.height * 0.85f * maxFactor * factorAltura
+
+            if (finalHeight > 0) {
+                drawPath(
+                    path = Path().apply {
+                        moveTo(pX, centerY - finalHeight / 2)
+                        lineTo(pX, centerY + finalHeight / 2)
+                    },
+                    brush = Brush.radialGradient(listOf(Color(0xFFFFB6C1).copy(alpha = 0.8f), Color.Transparent)),
+                    style = Stroke(width = 38f, cap = StrokeCap.Round)
+                )
+
+                drawPath(
+                    path = Path().apply {
+                        moveTo(pX, centerY - finalHeight / 2)
+                        lineTo(pX, centerY + finalHeight / 2)
+                    },
+                    color = Color.White,
+                    style = Stroke(width = 8f, cap = StrokeCap.Round)
+                )
+            }
+        }
+    }
+}
+
+// ====================================================================
+// ANIMACION: LLUVIA DE CORAZONES FLOTANTES
+// ====================================================================
+class HeartParticle(
+    var xOffset: Float,
+    var yOffset: Float,
+    val speed: Float,
+    val size: Float,
+    val color: Color
+)
+
+@Composable
+fun FloatingHeartsCoquette(isPlaying: Boolean) {
+    val heartColors = listOf(Color(0xFFFFB6C1), Color(0xFFF48FB1), Color(0xFFE91E63), Color.White)
+    var tick by remember { mutableFloatStateOf(0f) }
+
+    val particles = remember {
+        List(15) {
+            HeartParticle(
+                xOffset = (10..90).random() / 100f,
+                yOffset = (0..100).random() / 100f + 0.2f,
+                speed = (2..5).random() / 1000f,
+                size = (30..70).random().toFloat(),
+                color = heartColors.random()
+            )
+        }
+    }
+
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            delay(16)
+            tick += 1f
+            particles.forEach {
+                it.yOffset -= it.speed
+                if (it.yOffset < -0.2f) {
+                    it.yOffset = 1.1f
+                    it.xOffset = (10..90).random() / 100f
+                }
+            }
+        }
+    }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val currentTick = tick // Obligamos al canvas a redibujarse
+
+        particles.forEach { p ->
+            val w = p.size
+            val h = p.size
+
+            val path = Path().apply {
+                moveTo(w / 2f, h * 0.25f)
+                cubicTo(w * 0.1f, -h * 0.15f, -w * 0.15f, h * 0.4f, w / 2f, h * 0.9f)
+                cubicTo(w * 1.15f, h * 0.4f, w * 0.9f, -h * 0.15f, w / 2f, h * 0.25f)
+                close()
+            }
+
+            translate(left = p.xOffset * size.width - w / 2, top = p.yOffset * size.height - h / 2) {
+                drawPath(path, color = p.color.copy(alpha = 0.6f))
+            }
+        }
+    }
+}
+
+// ====================================================================
+// ANIMACION CASSETTE
+// ====================================================================
+@Composable fun CassetteCoquette(isPlaying: Boolean, colorAcento: Color) {
+    var angulo by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(isPlaying) { while (isPlaying) { delay(16); angulo += 4f; if (angulo >= 360f) angulo = 0f } }
+    // CASSETTE GIGANTE PARA LLENAR EL ESPACIO
+    Box(modifier = Modifier.size(300.dp, 180.dp).background(Color(0xFF1E0A11), RoundedCornerShape(16.dp)).border(2.dp, colorAcento.copy(alpha = 0.4f), RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(250.dp, 110.dp).background(Color(0xFF2D141E), RoundedCornerShape(12.dp)).border(1.5.dp, colorAcento.copy(alpha = 0.3f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.size(120.dp, 40.dp).background(Color.Black, RoundedCornerShape(6.dp)))
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 35.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                EngranajeCoquette(angulo, colorAcento)
+                EngranajeCoquette(angulo, colorAcento)
+            }
+        }
+    }
+}
+
+@Composable fun EngranajeCoquette(angulo: Float, color: Color) {
+    Box(modifier = Modifier.size(40.dp).graphicsLayer(rotationZ = angulo).background(Color.Black, CircleShape).border(2.dp, color.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(4.dp).height(40.dp).background(color.copy(alpha = 0.6f)))
+        Box(Modifier.width(40.dp).height(4.dp).background(color.copy(alpha = 0.6f)))
+    }
+}
+
+// ====================================================================
+// ICONOS DE VOLUMEN
+// ====================================================================
+@Composable
+fun VolumeSpeakerIcon(isHigh: Boolean, modifier: Modifier = Modifier) {
+    val color = Color(0xFFD81B60) // Magenta outline
+    Canvas(modifier = modifier.size(24.dp)) {
+        val stroke = Stroke(width = 3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val p = Path().apply {
+            moveTo(size.width * 0.1f, size.height * 0.4f)
+            lineTo(size.width * 0.35f, size.height * 0.4f)
+            lineTo(size.width * 0.6f, size.height * 0.2f)
+            lineTo(size.width * 0.6f, size.height * 0.8f)
+            lineTo(size.width * 0.35f, size.height * 0.6f)
+            lineTo(size.width * 0.1f, size.height * 0.6f)
             close()
         }
-        drawPath(
-            path = speakerPath,
-            brush = aestheticGradient,
-            style = Stroke(width = 4f, join = StrokeJoin.Round)
-        )
+        drawPath(p, color, style = stroke)
 
-        if (isHighVolume) {
+        if (isHigh) {
             val wave1 = Path().apply {
-                moveTo(size.width * 0.7f, size.height * 0.35f)
-                quadraticBezierTo(size.width * 0.85f, size.height * 0.5f, size.width * 0.7f, size.height * 0.65f)
+                moveTo(size.width * 0.75f, size.height * 0.35f)
+                quadraticBezierTo(size.width * 0.85f, size.height * 0.5f, size.width * 0.75f, size.height * 0.65f)
             }
-            drawPath(path = wave1, brush = aestheticGradient, style = Stroke(width = 4f, cap = StrokeCap.Round))
+            drawPath(wave1, color, style = stroke)
 
             val wave2 = Path().apply {
                 moveTo(size.width * 0.85f, size.height * 0.25f)
-                quadraticBezierTo(size.width * 1.05f, size.height * 0.5f, size.width * 0.85f, size.height * 0.75f)
+                quadraticBezierTo(size.width * 1.0f, size.height * 0.5f, size.width * 0.85f, size.height * 0.75f)
             }
-            drawPath(path = wave2, brush = aestheticGradient, style = Stroke(width = 4f, cap = StrokeCap.Round))
+            drawPath(wave2, color, style = stroke)
         }
     }
 }
 
 // ====================================================================
-// COMPONENTES DE BOTONES
+// ICONOS DE ALEATORIO/REPETIR
 // ====================================================================
 @Composable
-fun IpodWmpWheelButton(text: String, modifier: Modifier = Modifier, color: Color, onClick: () -> Unit) {
-    Box(
-        modifier = modifier.size(38.dp).clip(CircleShape).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(text = text, color = color, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-// ====================================================================
-// ANIMACIONES DEL LCD
-// ====================================================================
-@Composable
-fun DiscoCoquette(isPlaying: Boolean) {
-    var angulo by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(isPlaying) { while (isPlaying) { delay(16); angulo += 3f; if (angulo >= 360f) angulo = 0f } }
-    Box(
-        modifier = Modifier.size(140.dp).graphicsLayer(rotationZ = angulo).shadow(5.dp, CircleShape).background(Brush.linearGradient(colors = listOf(Color(0xFFFFD1DC), Color(0xFFFF85A2), Color(0xFFFFF0F5), Color(0xFFFFB6C1))), CircleShape).border(1.dp, Color.White.copy(0.5f), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(modifier = Modifier.size(128.dp).background(Brush.radialGradient(colors = listOf(Color.Transparent, Color(0xFFFFC0CB).copy(alpha = 0.2f), Color(0xFFE1BEE7).copy(alpha = 0.2f), Color.Transparent)), CircleShape), contentAlignment = Alignment.Center) {
-            Box(modifier = Modifier.size(40.dp).background(Color.White.copy(alpha = 0.2f), CircleShape).border(1.dp, Color.White.copy(0.4f), CircleShape), contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.size(16.dp).background(Color(0xFF0D0206), CircleShape))
-            }
+fun ExactShuffleIcon(isActive: Boolean, modifier: Modifier = Modifier) {
+    val iconGradient = if (isActive) Brush.horizontalGradient(listOf(Color(0xFFDDA754), Color(0xFFF28BB1))) else SolidColor(Color(0xFFD81B60).copy(alpha = 0.5f))
+    Canvas(modifier = modifier) {
+        val stroke = Stroke(width = 4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val path1 = Path().apply {
+            moveTo(size.width * 0.1f, size.height * 0.3f)
+            lineTo(size.width * 0.3f, size.height * 0.3f)
+            cubicTo(size.width * 0.5f, size.height * 0.3f, size.width * 0.5f, size.height * 0.7f, size.width * 0.7f, size.height * 0.7f)
+            lineTo(size.width * 0.85f, size.height * 0.7f)
         }
-    }
-}
-
-@Composable
-fun CassetteCoquette(isPlaying: Boolean, colorAcento: Color) {
-    var angulo by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(isPlaying) { while (isPlaying) { delay(16); angulo += 4f; if (angulo >= 360f) angulo = 0f } }
-    Box(modifier = Modifier.size(220.dp, 120.dp).background(Color(0xFF1E0A11), RoundedCornerShape(12.dp)).border(1.5.dp, colorAcento.copy(alpha = 0.4f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-        Box(modifier = Modifier.size(180.dp, 70.dp).background(Color(0xFF2D141E), RoundedCornerShape(8.dp)).border(1.dp, colorAcento.copy(alpha = 0.3f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-            Box(modifier = Modifier.size(70.dp, 25.dp).background(Color.Black, RoundedCornerShape(4.dp)))
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 25.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                EngranajeCoquette(angulo, colorAcento); EngranajeCoquette(angulo, colorAcento)
-            }
+        drawPath(path1, iconGradient, style = stroke)
+        val head1 = Path().apply {
+            moveTo(size.width * 0.65f, size.height * 0.5f)
+            lineTo(size.width * 0.85f, size.height * 0.7f)
+            lineTo(size.width * 0.65f, size.height * 0.9f)
         }
-    }
-}
+        drawPath(head1, iconGradient, style = stroke)
 
-@Composable
-fun EngranajeCoquette(angulo: Float, color: Color) {
-    Box(modifier = Modifier.size(26.dp).graphicsLayer(rotationZ = angulo).background(Color.Black, CircleShape).border(1.5.dp, color.copy(alpha = 0.6f), CircleShape), contentAlignment = Alignment.Center) {
-        Box(Modifier.width(2.dp).height(26.dp).background(color.copy(alpha = 0.6f)))
-        Box(Modifier.width(26.dp).height(2.dp).background(color.copy(alpha = 0.6f)))
-    }
-}
-
-// ====================================================================
-// ECUALIZADOR DINÁMICO EN FORMA DE CORAZÓN (Latido Global)
-// ====================================================================
-@Composable
-fun VisualizerOndasCoquette(isPlaying: Boolean, color: Color) {
-    val totalBarras = 23
-
-    val matrizCorazon = remember {
-        listOf(
-            0.20f, 0.45f, 0.75f, 0.95f, 1.00f, 0.85f, 0.65f, 0.45f, 0.30f, 0.45f, 0.65f, 0.85f,
-            1.00f, 0.95f, 0.75f, 0.45f, 0.20f
-        )
-    }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "latido_corazon")
-    val factorLatido by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = if (isPlaying) 1.0f else 0.5f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 350, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulso"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(110.dp)
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        val paddingLateral = (totalBarras - matrizCorazon.size) / 2
-
-        repeat(totalBarras) { indice ->
-            val dentroDelCorazon = indice >= paddingLateral && indice < paddingLateral + matrizCorazon.size
-
-            val alturaObjetivo = if (dentroDelCorazon) {
-                val alturaBase = 90.dp * matrizCorazon[indice - paddingLateral]
-                if (isPlaying) alturaBase * factorLatido else alturaBase * 0.2f
-            } else {
-                0.dp
-            }
-
-            val alturaAnimada by animateDpAsState(
-                targetValue = alturaObjetivo,
-                animationSpec = tween(durationMillis = 150, easing = LinearEasing),
-                label = "anim_barra"
-            )
-
-            if (alturaAnimada > 0.dp) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(alturaAnimada)
-                        .background(color, RoundedCornerShape(3.dp))
-                )
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
-            }
+        val path2 = Path().apply {
+            moveTo(size.width * 0.1f, size.height * 0.7f)
+            lineTo(size.width * 0.3f, size.height * 0.7f)
+            cubicTo(size.width * 0.5f, size.height * 0.7f, size.width * 0.5f, size.height * 0.3f, size.width * 0.7f, size.height * 0.3f)
+            lineTo(size.width * 0.85f, size.height * 0.3f)
         }
+        drawPath(path2, iconGradient, style = stroke)
+        val head2 = Path().apply {
+            moveTo(size.width * 0.65f, size.height * 0.1f)
+            lineTo(size.width * 0.85f, size.height * 0.3f)
+            lineTo(size.width * 0.65f, size.height * 0.5f)
+        }
+        drawPath(head2, iconGradient, style = stroke)
+    }
+}
+
+@Composable
+fun ExactRepeatIcon(isActive: Boolean, modifier: Modifier = Modifier) {
+    val iconGradient = if (isActive) Brush.horizontalGradient(listOf(Color(0xFFDDA754), Color(0xFFF28BB1))) else SolidColor(Color(0xFFD81B60).copy(alpha = 0.5f))
+    Canvas(modifier = modifier) {
+        val stroke = Stroke(width = 4.5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val path1 = Path().apply {
+            moveTo(size.width * 0.2f, size.height * 0.5f)
+            quadraticBezierTo(size.width * 0.2f, size.height * 0.15f, size.width * 0.55f, size.height * 0.15f)
+            lineTo(size.width * 0.8f, size.height * 0.15f)
+        }
+        drawPath(path1, iconGradient, style = stroke)
+        val head1 = Path().apply {
+            moveTo(size.width * 0.6f, size.height * 0.0f)
+            lineTo(size.width * 0.8f, size.height * 0.15f)
+            lineTo(size.width * 0.6f, size.height * 0.3f)
+        }
+        drawPath(head1, iconGradient, style = stroke)
+
+        val path2 = Path().apply {
+            moveTo(size.width * 0.8f, size.height * 0.5f)
+            quadraticBezierTo(size.width * 0.8f, size.height * 0.85f, size.width * 0.45f, size.height * 0.85f)
+            lineTo(size.width * 0.2f, size.height * 0.85f)
+        }
+        drawPath(path2, iconGradient, style = stroke)
+        val head2 = Path().apply {
+            moveTo(size.width * 0.4f, size.height * 0.7f)
+            lineTo(size.width * 0.2f, size.height * 0.85f)
+            lineTo(size.width * 0.4f, size.height * 1.0f)
+        }
+        drawPath(head2, iconGradient, style = stroke)
     }
 }
 
 // ====================================================================
-// UTILIDADES
+// COMPONENTES AUXILIARES
 // ====================================================================
+@Composable
+fun IpodWmpWheelButton(text: String, modifier: Modifier, color: Color, onClick: () -> Unit) {
+    Box(modifier = modifier.size(40.dp).clip(CircleShape).clickable { onClick() }, contentAlignment = Alignment.Center) {
+        Text(text, color = color, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
 fun formatTimeCoquette(ms: Long): String {
     if (ms < 0) return "00:00"
     val totalSeconds = ms / 1000
